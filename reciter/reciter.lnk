@@ -1,0 +1,15 @@
+
+MEMORY
+{
+    BLOCK1_HEADER: start = $0600, size =    6, file = %O;
+    BLOCK1       : start = $4590, size = 5934, file = %O;
+    BLOCK2_HEADER: start = $0600, size =    4, file = %O;
+    BLOCK2       : start = $0600, size =    2, file = %O;
+
+}
+SEGMENTS {
+    BLOCK1_HEADER: load = BLOCK1_HEADER, type = ro;
+    BLOCK1       : load = BLOCK1       , type = ro;
+    BLOCK2_HEADER: load = BLOCK2_HEADER, type = ro;
+    BLOCK2       : load = BLOCK2       , type = ro;
+}
