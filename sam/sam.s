@@ -11,8 +11,16 @@
 
 ; ----------------------------------------------------------------------------
 
-RECITER_4708 := $4708
-RECITER_470B := $470B
+RUN_RECITER_FROM_BASIC_4708        := $4708
+RUN_RECITER_FROM_MACHINE_CODE_470B := $470B
+
+; ----------------------------------------------------------------------------
+
+        .export SAM_BUFFER            ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
+        .export SAM_SAY_PHONEMES      ; Play the phonemes in SAM_BUFFER as sound.
+        .export SAM_COPY_SAM_STRING   ; Routine to find and copy SAM$ into the SAM_BUFFER.
+        .export SAM_SAVE_ZP_ADDRESSES ; Save zero-page addresses used by SAM.
+        .export SAM_ERROR_SOUND       ; Routine to signal error using a distinctive error sound.
 
 ; ----------------------------------------------------------------------------
 
@@ -28,30 +36,50 @@ RECITER_470B := $470B
 
         .segment "SAM_BLOCK1"
 
-        pla                                     ; SAM entry point from BASIC.
-        jmp     L2114                           ;
+        ; SAM entry point from BASIC (address 8192).
+        ; SAM$ is assumed to contain a string holding phonemes.
+
+SAM_RUN_SAM_FROM_BASIC:
+
+        pla                                     ; Pop the number of arguments from the 6502 stack that was pushed by Atari BASIC.
+        jmp     RUN_SAM_FROM_BASIC              ;
 
 ; ----------------------------------------------------------------------------
 
-        jmp     L211C                           ;
+        ; SAM entry point from machine code (address 0x2005).
+        ; The phonemes are assumed to be in the SAM_BUFFER.
+
+SAM_RUN_SAM_FROM_MACHINE_CODE:
+
+        jmp     RUN_SAM_FROM_MACHINE_CODE                           ;
 
 ; ----------------------------------------------------------------------------
 
-        pla                                     ; Reciter entry point from BASIC.
-        jmp     RECITER_4708                    ;
+        ; Reciter entry point from BASIC (address 8200).
+        ; SAM$ is assumed to contain a string holding English text.
+
+SAM_RUN_RECITER_FROM_BASIC:
+
+        pla                                     ; Pop the number of arguments from the 6502 stack that was pushed by Atari BASIC.
+        jmp     RUN_RECITER_FROM_BASIC_4708     ;
 
 ; ----------------------------------------------------------------------------
 
-        jmp     RECITER_470B                    ;
+SAM_RUN_RECITER_FROM_MACHINE_CODE:
+
+        ; Reciter entry point from machine code (address 0x200d).
+        ; The English text is assumed to be in the SAM_BUFFER.
+
+        jmp     RUN_RECITER_FROM_MACHINE_CODE_470B                    ;
 
 ; ----------------------------------------------------------------------------
 
-D200E:  .byte   $41                             ; 200E 41                       A
-D200F:  .byte   $40                             ; 200F 40                       @
-D2010:  .byte   $46                             ; 2010 46                       F
-D2011:  .byte   $40                             ; 2011 40                       @
-D2012:  .byte   $00                             ; 2012 00                       .
-D2013:  .byte   $FF                             ; 2013 FF                       .
+D200E:  .byte   $41                             ;
+D200F:  .byte   $40                             ;
+D2010:  .byte   $46                             ;
+D2011:  .byte   $40                             ;
+D2012:  .byte   $00                             ;
+D2013:  .byte   $FF                             ;         .
 
 ; ----------------------------------------------------------------------------
 
@@ -65,36 +93,43 @@ SAM_BUFFER:
 
 ; ----------------------------------------------------------------------------
 
-L2114:  jsr     SAM_21B7                        ; Entry point from BASIC (after PLA).
-        lda     $CB                             ;
-        beq     L211C                           ;
-        rts                                     ;
+RUN_SAM_FROM_BASIC:
+
+        jsr     SAM_COPY_SAM_STRING             ; Entry point from BASIC (after PLA).
+        lda     $CB                             ; Is result zero (good?)
+        beq     RUN_SAM_FROM_MACHINE_CODE       ; Yes! Play the phonemes.
+        rts                                     ; Return to BASIC.
 
 ; ----------------------------------------------------------------------------
 
-L211C:  jsr     SAM_3FC0                        ;
+RUN_SAM_FROM_MACHINE_CODE:
+
+        jsr     SAM_SAVE_ZP_ADDRESSES           ; Save ZP addresses, then proceed with SAM_SAY_PHONEMES.
 
 ; ----------------------------------------------------------------------------
 
-SAM_211F:                                       ; Note: entry point for the reciter.
+SAM_SAY_PHONEMES:                               ; Note: entry point for the reciter.
 
         lda     #$FF                            ;
         sta     D2013                           ;
-        jsr     SUB26EA                         ;
+        jsr     SUB_26EA                        ;
         lda     D2013                           ;
         cmp     #$FF                            ;
         bne     @5                              ;
-        jsr     SUB2837                         ;
-        jsr     SUB2A1D                         ;
-        jsr     SUB2775                         ;
-        jsr     SUB43F2                         ;
-        jsr     SUB279A                         ;
-        lda     #$00                            ;
+        jsr     SUB_2837                        ;
+        jsr     SUB_2A1D                        ;
+        jsr     SUB_2775                        ;
+        jsr     SUB_43F2                        ;
+        jsr     SUB_279A                        ;
+
+        lda     #0                              ; Init hardware.
         sta     $D40E                           ;
         sta     $D20E                           ;
-        lda     D2012                           ;
+
+        lda     D2012                           ; Select Codepath #1 or Codepath #2.
         beq     @1                              ;
-        lda     #$01                            ;
+
+        lda     #1                              ; Codepath #1: Initialize self-modifying code values.
         sta     SMC42DF                         ;
         sta     SMC4210                         ;
         sta     SMC42B0                         ;
@@ -102,11 +137,13 @@ SAM_211F:                                       ; Note: entry point for the reci
         sta     SMC403F                         ;
         lda     D200E                           ;
         sta     SMC421F                         ;
+
         jmp     @2                              ;
 
-@1:     lda     #$00                            ;
+@1:     lda     #0                              ; Codepath #2
         sta     $D400                           ;
-        lda     #$10                            ;
+
+        lda     #$10                            ; Update self-modifying code values.
         sta     SMC4210                         ;
         lda     #$0D                            ;
         sta     SMC42B0                         ;
@@ -116,6 +153,7 @@ SAM_211F:                                       ; Note: entry point for the reci
         sta     SMC403F                         ;
         lda     D2010                           ;
         sta     SMC421F                         ;
+
 @2:     lda     D2262,x                         ;
         cmp     #$50                            ;
         bcs     @3                              ;
@@ -124,17 +162,17 @@ SAM_211F:                                       ; Note: entry point for the reci
         beq     @4                              ;
 @3:     lda     #$FF                            ;
         sta     D2262,x                         ;
-@4:     jsr     SUB4336                         ;
+@4:     jsr     SUB_4336                        ;
         lda     #$FF                            ;
         sta     D2360                           ;
-        jsr     SUB43AA                         ;
+        jsr     SUB_43AA                        ;
         ldx     #$00                            ;
         cpx     $CD                             ;
         stx     $CD                             ;
         beq     @5                              ;
         rts                                     ;
 
-@5:     jsr     SUB3FCB                         ;
+@5:     jsr     SAM_RESTORE_ZP_ADDRESSES        ;
         lda     #$FF                            ;
         sta     $D40E                           ;
         lda     $10                             ;
@@ -143,99 +181,125 @@ SAM_211F:                                       ; Note: entry point for the reci
 
 ; ----------------------------------------------------------------------------
 
-SAM_21B7:                                       ; Note: entry point for the reciter.
+SAM_COPY_SAM_STRING:                            ; Note: entry point for the reciter.
 
-        lda     #$00                            ;
-        sta     $CB                             ;
+        ; This subroutine searches the BASIC variable SAM$.
+        ;
+        ; If found, it copies its contents to SAM_BUFFER.
+        ; If not found, we return to BASIC.
+
+        lda     #0                              ; Initialize $CB, $CC, $CD to zero.
+        sta     $CB                             ; ($CB, $CC) holds the variable index.
         sta     $CC                             ;
         sta     $CD                             ;
-        lda     $82                             ;
+
+        lda     $82                             ; Copy pointer ($82, $83) to ($CE, $CF).
         sta     $CE                             ;
         lda     $83                             ;
         sta     $CF                             ;
-        lda     $8C                             ;
+
+        lda     $8C                             ; Copy pointer ($8C, $8D) to ($D0, $D1).
         sta     $D0                             ;
         lda     $8D                             ;
         sta     $D1                             ;
-@1:     ldy     #$00                            ;
-        lda     ($CE),y                         ;
-        cmp     #$53                            ;
-        bne     @2                              ;
-        iny                                     ;
-        lda     ($CE),y                         ;
-        cmp     #$41                            ;
-        bne     @2                              ;
-        iny                                     ;
-        lda     ($CE),y                         ;
-        cmp     #$4D                            ;
-        bne     @2                              ;
-        iny                                     ;
-        lda     ($CE),y                         ;
-        cmp     #$A4                            ;
-        bne     @2                              ;
-        jmp     @6                              ;
 
-@2:     lda     $CE                             ;
-        cmp     $84                             ;
-        bne     @3                              ;
-        lda     $CF                             ;
-        cmp     $85                             ;
-        beq     @8                              ;
-@3:     ldy     #$00                            ;
+@check_variable:
+
+        ldy     #0                              ; Check if we find "SAM$" at the location pointed to by
+        lda     ($CE),y                         ; ($CE, $CF).
+        cmp     #'S'                            ;
+        bne     @not_found_here                 ; If not found, proceed to @not_found_here.
+        iny                                     ;
+        lda     ($CE),y                         ; 
+        cmp     #'A'                            ;
+        bne     @not_found_here                 ;
+        iny                                     ;
+        lda     ($CE),y                         ;
+        cmp     #'M'                            ;
+        bne     @not_found_here                 ;
+        iny                                     ;
+        lda     ($CE),y                         ;
+        cmp     #'$' + $80                      ;
+        bne     @not_found_here                 ;
+        jmp     @found_sam_string_variable      ; If found, proceed to @found_sam_string_variable.
+
+@not_found_here:
+
+        lda     $CE                             ; Check if pointer ($CE, $CF) is identical to ($84, $85), which
+        cmp     $84                             ; is the end of BASIC variable memory.
+        bne     @continue_search                ;
+        lda     $CF                             ; If not equal, proceed at @3.
+        cmp     $85                             ; If equal, we've reached the end of the BASIC program; go to @end.
+        beq     @report_error                   ;
+
+@continue_search:
+
+        ldy     #0                              ;
         lda     ($CE),y                         ;
         bpl     @4                              ;
-        inc     $CB                             ;
-@4:     inc     $CE                             ;
+        inc     $CB                             ; Increment variable index whenever we pass through a character with its most significant bit set.
+@4:     inc     $CE                             ; Increment ($CE, $CF).
         bne     @5                              ;
         inc     $CF                             ;
-@5:     jmp     @1                              ;
+@5:     jmp     @check_variable                 ; Proceed to check the next variable.
 
-@6:     clc                                     ;
+@found_sam_string_variable:
+
+        clc                                     ; Multiply ($CB, $CC) by 8.
         asl     $CB                             ;
         rol     $CC                             ;
         asl     $CB                             ;
         rol     $CC                             ;
         asl     $CB                             ;
         rol     $CC                             ;
-        clc                                     ;
+
+        clc                                     ; Add pointer ($86, $87).
         lda     $CB                             ;
         adc     $86                             ;
         sta     $CB                             ;
         lda     $CC                             ;
         adc     $87                             ;
         sta     $CC                             ;
-        ldy     #$05                            ;
+
+        ldy     #5                              ; If size of string exceeds 255, report error.
         lda     ($CB),y                         ;
-        bne     @8                              ;
-        dey                                     ;
+        bne     @report_error                   ;
+        dey                                     ; Copy size into $CD.
         lda     ($CB),y                         ;
         sta     $CD                             ;
-        ldy     #$02                            ;
+
+        ldy     #2                              ;
         lda     ($CB),y                         ;
         clc                                     ;
         adc     $D0                             ;
         sta     $D0                             ;
-        ldy     #$03                            ;
+        ldy     #3                              ;
         lda     ($CB),y                         ;
         adc     $D1                             ;
         sta     $D1                             ;
-        ldy     #$00                            ;
-@7:     lda     ($D0),y                         ;
+
+        ldy     #0                              ; Copy content of SAM$ into SAM_BUFFER.
+@copy:  lda     ($D0),y                         ;
         sta     SAM_BUFFER,y                    ;
         iny                                     ;
         cpy     $CD                             ;
-        bne     @7                              ;
-        lda     #$9B                            ;
+        bne     @copy                           ;
+
+        lda     #$9B                            ; Append closing $9B character.
         sta     SAM_BUFFER,y                    ;
-        lda     #$00                            ;
+
+        lda     #0                              ; Zero values $CB, $CD.
         sta     $CB                             ;
         sta     $CD                             ;
-        rts                                     ;
 
-@8:     jsr     SAM_452D                        ;
+        rts                                     ; Return succesfully.
+
+@report_error:
+
+        jsr     SAM_ERROR_SOUND                 ; Sound an error.
         lda     #1                              ;
-        sta     $CB                             ;
-        rts                                     ;
+        sta     $CB                             ; Report error as result to basic (USR function result).
+        rts                                     ; Done.
 
 ; ----------------------------------------------------------------------------
 
@@ -383,7 +447,7 @@ D265C:  .byte   $80,$C1,$C1,$C1,$C1,$00,$00,$00 ; 265C 80 C1 C1 C1 C1 00 00 00  
 
 ; ----------------------------------------------------------------------------
 
-SUB26AA:
+SUB_26AA:
 
         sta     $FC                             ;
         stx     $FB                             ;
@@ -392,7 +456,7 @@ SUB26AA:
 
 ; ----------------------------------------------------------------------------
 
-SUB26B1:
+SUB_26B1:
 
         lda     $FC                             ;
         ldx     $FB                             ;
@@ -401,9 +465,9 @@ SUB26B1:
 
 ; ----------------------------------------------------------------------------
 
-SUB26B8:
+SUB_26B8:
 
-        jsr     SUB26AA                         ;
+        jsr     SUB_26AA                         ;
         ldx     #$FF                            ;
         ldy     #$00                            ;
 @1:     dex                                     ;
@@ -422,12 +486,12 @@ SUB26B8:
         sta     D2362,x                         ;
         lda     $F7                             ;
         sta     D2462,x                         ;
-        jsr     SUB26B1                         ;
+        jsr     SUB_26B1                        ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
-SUB26EA:
+SUB_26EA:                                       ; Called by SAM_SAY_PHONEMES.
 
         ldx     #0                              ;
         txa                                     ;
@@ -488,7 +552,7 @@ SUB26EA:
         dey                                     ;
         bne     @11                             ;
         stx     D2013                           ;
-        jsr     SAM_452D                        ;
+        jsr     SAM_ERROR_SOUND                 ;
         rts                                     ;
 
 @12:    tya                                     ;
@@ -504,7 +568,7 @@ SUB26EA:
 
 ; ----------------------------------------------------------------------------
 
-SUB2775:
+SUB_2775:                                       ; Called by SAM_SAY_PHONEMES.
 
         ldy     #0                              ;
 @1:     lda     D2262,y                         ;
@@ -527,7 +591,7 @@ SUB2775:
 
 ; ----------------------------------------------------------------------------
 
-SUB279A:
+SUB_279A:                                       ; Called by SAM_SAY_PHONEMES.
 
         lda     #$00                            ;
         sta     $FF                             ;
@@ -557,14 +621,14 @@ SUB279A:
         sta     $F8                             ;
         inx                                     ;
         stx     $F6                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         inc     $F9                             ;
         ldy     $F9                             ;
         lda     D3830,y                         ;
         sta     $F8                             ;
         inx                                     ;
         stx     $F6                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         inc     $FF                             ;
         inc     $FF                             ;
         inc     $FF                             ;
@@ -597,13 +661,13 @@ SUB279A:
         stx     $F9                             ;
         lda     D3830,x                         ;
         sta     $F8                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         inc     $F6                             ;
         inx                                     ;
         stx     $F9                             ;
         lda     D3830,x                         ;
         sta     $F8                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         inc     $FF                             ;
         inc     $FF                             ;
 @7:     inc     $FF                             ;
@@ -611,7 +675,7 @@ SUB279A:
 
 ; ----------------------------------------------------------------------------
 
-SUB2837:
+SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
 
         lda     #$00                            ;
         sta     $FF                             ;
@@ -638,7 +702,7 @@ SUB2837:
         beq     @5                              ;
         lda     #$15                            ;
 @4:     sta     $F9                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         ldx     $FF                             ;
         jmp     @25                             ;
 
@@ -655,7 +719,7 @@ SUB2837:
         sta     D2262,x                         ;
         inx                                     ;
         stx     $F6                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         jmp     @36                             ;
 
 @8:     cmp     #$4F                            ;
@@ -687,7 +751,7 @@ SUB2837:
         sta     $F7                             ;
         lda     #$1F                            ;
         sta     $F9                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         jmp     @36                             ;
 
 @11:    ldx     $FF                             ;
@@ -823,7 +887,7 @@ SUB2837:
         dex                                     ;
         lda     D2462,x                         ;
         sta     $F7                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         jmp     @36                             ;
 
 @31:    cmp     #$45                            ;
@@ -864,7 +928,7 @@ SUB2837:
 
 ; ----------------------------------------------------------------------------
 
-SUB2A1D:
+SUB_2A1D:                                       ; Called by SAM_SAY_PHONEMES.
 
         lda     #$00                            ;
         sta     $FF                             ;
@@ -894,10 +958,15 @@ SUB2A1D:
 
 ; ----------------------------------------------------------------------------
 
-D2A4F:  .byte   $00,$82,$09,$00,$00,$00,$EB,$37 ; 2A4F 00 82 09 00 00 00 EB 37  .......7
-        .byte   $A2,$31,$30,$00,$20,$11,$00,$80 ; 2A57 A2 31 30 00 20 11 00 80  .10. ...
-        .byte   $02,$04,$04,$80,$05,$00,$00,$20 ; 2A5F 02 04 04 80 05 00 00 20  ....... 
-        .byte   $00,$06,$66,$00,$FE,$9B,$2E,$2C ; 2A67 00 06 66 00 FE 9B 2E 2C  ..f....,
+        ; Area for saving zero page values from $E1..$FF.
+
+D2A4F:  .byte   $00,$82,$09,$00,$00,$00,$EB,$37
+        .byte   $A2,$31,$30,$00,$20,$11,$00,$80
+        .byte   $02,$04,$04,$80,$05,$00,$00,$20
+        .byte   $00,$06,$66,$00,$FE,$9B,$2E,$2C
+
+; ----------------------------------------------------------------------------
+
 D2A6F:  .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 2A6F 00 00 00 00 00 00 00 00  ........
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 2A77 00 00 00 00 00 00 00 00  ........
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 2A7F 00 00 00 00 00 00 00 00  ........
@@ -1623,7 +1692,7 @@ D3F84:  .byte   $00,$00,$E0,$E6,$EC,$F3,$F9,$00 ; 3F84 00 00 E0 E6 EC F3 F9 00  
 
 ; ----------------------------------------------------------------------------
 
-SUB3F8F:
+SUB_3F8F:
 
         ldy     #0                              ;
         bit     $F2                             ;
@@ -1655,36 +1724,40 @@ SUB3F8F:
 
 ; ----------------------------------------------------------------------------
 
-SAM_3FC0:                                       ; Note: entry point for the reciter.
+SAM_SAVE_ZP_ADDRESSES:
+
+        ; Save zero page addresses $E1..$FF.
+        ; Note that address $E0 is not saved. (Bug?)
 
         ldx     #$1F                            ;
-@1:     lda     $E0,x                           ;
+@loop:  lda     $E0,x                           ;
         sta     D2A4F,x                         ;
         dex                                     ;
-        bne     @1                              ;
+        bne     @loop                           ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
-SUB3FCB:
+SAM_RESTORE_ZP_ADDRESSES:
+
+        ; Restore zero page addresses $E1..$FF.
+        ; Note that address $E0 is not saved. (Bug?)
 
         ldx     #$1F                            ;
-@1:     lda     D2A4F,x                         ;
+@loop:  lda     D2A4F,x                         ;
         sta     $E0,x                           ;
         dex                                     ;
-        bne     @1                              ;
+        bne     @loop                           ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
-SUB3FD6:
+SUB_3FD6:
 
         lda     D3EC0                           ;
         cmp     #$FF                            ;
         bne     @1                              ;
         rts                                     ;
-
-; ----------------------------------------------------------------------------
 
 @1:     lda     #$00                            ;
         tax                                     ;
@@ -1732,7 +1805,9 @@ L4013:  lda     D3600,y                         ;
         lda     D3970,y                         ;
         sta     D3500,x                         ;
         clc                                     ;
-SMC403F           := * + 1
+
+SMC403F := * + 1                                ; Self-modifying code: argument of lda #imm below.
+
         lda     #$40                            ;
         adc     $E8                             ;
         sta     D2E00,x                         ;
@@ -1833,7 +1908,7 @@ L404E:  lda     #$00                            ;
         sta     $F2                             ;
         lda     $E5                             ;
         sta     $F1                             ;
-        jsr     SUB3F8F                         ;
+        jsr     SUB_3F8F                        ;
         ldx     $E5                             ;
         ldy     $E1                             ;
         jmp     @199                            ;
@@ -1846,7 +1921,7 @@ L404E:  lda     #$00                            ;
         sta     $F2                             ;
         lda     $E5                             ;
         sta     $F1                             ;
-        jsr     SUB3F8F                         ;
+        jsr     SUB_3F8F                        ;
         ldx     $E5                             ;
         ldy     $E6                             ;
 @199:   lda     #$00                            ;
@@ -1939,7 +2014,7 @@ L404E:  lda     #$00                            ;
 
 ; ----------------------------------------------------------------------------
 
-L41C2:  jsr     SUB426A                         ;
+L41C2:  jsr     SUB_426A                        ;
         iny                                     ;
         iny                                     ;
         dec     $ED                             ;
@@ -1979,7 +2054,9 @@ L41CE:  lda     D3500,y                         ;
         lsr     a                               ;
         ora     #$10                            ;
         sta     $D201                           ;
-SMC4210           := * + 1
+
+SMC4210 := * + 1                                ; Self-modifying code: argument of ldx #imm below.
+
         ldx     #$10                            ;
 @100:   dex                                     ;
         bne     @100                            ;
@@ -1993,7 +2070,9 @@ L421B:  bne     L421E                           ;
 ; ----------------------------------------------------------------------------
 
 L421E:
-SMC421F           := * + 1
+
+SMC421F := * + 1                                ; Self-modifying code: argument of lda #imm below.
+
         lda     #$46                            ;
         sta     $EA                             ;
 L4222:  dec     $E9                             ;
@@ -2020,7 +2099,7 @@ L4222:  dec     $E9                             ;
         bne     L424F                           ;
         lda     $E4                             ;
         beq     L424F                           ;
-        jsr     SUB426A                         ;
+        jsr     SUB_426A                        ;
         jmp     @100                            ;
 
 ; ----------------------------------------------------------------------------
@@ -2041,7 +2120,7 @@ L424F:  clc                                     ;
 
 ; ----------------------------------------------------------------------------
 
-SUB426A:
+SUB_426A:
 
         sty     $EE                             ;
         lda     $E4                             ;
@@ -2085,7 +2164,9 @@ L429F:  asl     a                               ;
         stx     $D201                           ;
         nop                                     ;
 @101:
-SMC42B0           := * + 1
+
+SMC42B0 := * + 1                                ; Self-modifying code: argument of ldx #imm below.
+
         ldx     #$0D                            ;
 @102:  dex                                      ;
         bne     @102                            ;
@@ -2115,7 +2196,9 @@ L42CE:  asl     a                               ;
         stx     $D201                           ;
         nop                                     ;
 @101:
-SMC42DF           := * + 1
+
+SMC42DF := * + 1                                ; Self-modifying code: argument of ldx #imm below.
+
         ldx     #$0C                            ;
 @102:   dex                                     ;
         bne     @102                            ;
@@ -2175,7 +2258,7 @@ D4331:  .byte   $18,$1A,$17,$17,$17
 
 ; ----------------------------------------------------------------------------
 
-SUB4336:
+SUB_4336:
 
         ldx     #$FF                            ;
         stx     $F3                             ;
@@ -2206,7 +2289,7 @@ SUB4336:
         sta     $F7                             ;
         lda     #$FE                            ;
         sta     $F9                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         inc     $FF                             ;
         inc     $FF                             ;
         jmp     @1                              ;
@@ -2231,7 +2314,7 @@ SUB4336:
         lda     #$00                            ;
         sta     $F4                             ;
         sta     $F7                             ;
-        jsr     SUB26B8                         ;
+        jsr     SUB_26B8                        ;
         inx                                     ;
         stx     $FF                             ;
         jmp     @1                              ;
@@ -2243,7 +2326,7 @@ D43A9:  .byte   $07                             ; 43A9 07                       
 
 ; ----------------------------------------------------------------------------
 
-SUB43AA:
+SUB_43AA:
 
         lda     #$00                            ;
         tax                                     ;
@@ -2253,7 +2336,7 @@ SUB43AA:
         bne     @2                              ;
         lda     #$FF                            ; Handle case: $FF
         sta     D3EC0,y                         ;
-        jsr     SUB3FD6                         ;
+        jsr     SUB_3FD6                        ;
         rts                                     ;
 
 @2:     cmp     #$FE                            ;
@@ -2262,7 +2345,7 @@ SUB43AA:
         stx     D43A9                           ;
         lda     #$FF                            ;
         sta     D3EC0,y                         ;
-        jsr     SUB3FD6                         ;
+        jsr     SUB_3FD6                        ;
         ldx     D43A9                           ;
         ldy     #0                              ;
         jmp     @1                              ;
@@ -2283,7 +2366,7 @@ SUB43AA:
 
 ; ----------------------------------------------------------------------------
 
-SUB43F2:
+SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
 
         ldx     #0                              ;
 @1:     ldy     D2262,x                         ;
@@ -2449,9 +2532,11 @@ SUB43F2:
 
 ; ----------------------------------------------------------------------------
 
-SAM_452D:                                       ; Note: entry point for the reciter.
+SAM_ERROR_SOUND:
 
-        lda     #$02                            ;
+        ; Make error noise.
+
+        lda     #2                              ;
         sta     $CC                             ;
 @1:     lda     $14                             ;
         clc                                     ;
@@ -2479,7 +2564,7 @@ SAM_452D:                                       ; Note: entry point for the reci
         bne     @5                              ;
         jmp     @1                              ;
 
-@6:  rts                                        ;
+@6:     rts                                     ;
 
 ; ----------------------------------------------------------------------------
 

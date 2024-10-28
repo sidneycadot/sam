@@ -10,11 +10,16 @@
 
 ; ----------------------------------------------------------------------------
 
-SAM_BUFFER      := $2014
-SAM_211F        := $211F
-SAM_21B7        := $21B7
-SAM_3FC0        := $3FC0
-SAM_452D        := $452D
+SAM_BUFFER            := $2014        ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
+SAM_SAY_PHONEMES      := $211F        ; Play the phonemes in SAM_BUFFER as sound.
+SAM_COPY_SAM_STRING   := $21B7        ; Routine to find and copy SAM$ into the SAM_BUFFER.
+SAM_SAVE_ZP_ADDRESSES := $3FC0        ; Save zero-page addresses used by SAM.
+SAM_ERROR_SOUND       := $452D        ; Routine to signal error using a distinctive error sound.
+
+; ----------------------------------------------------------------------------
+
+                .export RUN_RECITER_FROM_BASIC_4708
+                .export RUN_RECITER_FROM_MACHINE_CODE_470B
 
 ; ----------------------------------------------------------------------------
 
@@ -51,10 +56,21 @@ CHARACTER_PROPERTY:
 
 ; ----------------------------------------------------------------------------
 
-        jsr     SAM_21B7                        ; Call subroutine in SAM.
-        jsr     SAM_3FC0                        ; Call subroutine in SAM.
+RUN_RECITER_FROM_BASIC_4708:
 
-                                                ; Copy content of SAM buffer to RECITER buffer.
+        ; Reciter when entered from BASIC, through a call to the USR(8200) function.
+        ; When entering here, the number of arguments is already popped from the 6502 stack.
+
+        jsr     SAM_COPY_SAM_STRING             ; Call subroutine in SAM.
+
+RUN_RECITER_FROM_MACHINE_CODE_470B:
+
+        ; Reciter when entered from machine code.
+        ; When entering, the string to be translated should be in the SAM_BUFFER.
+
+        jsr     SAM_SAVE_ZP_ADDRESSES           ; Call subroutine in SAM.
+
+        ; Copy content of SAM buffer to RECITER buffer, with a bit of character sanitization.
 
         lda     #' '                            ; Put a space character at the start of the RECITER buffer.
         sta     RECITER_BUFFER                  ;
@@ -80,16 +96,20 @@ CHARACTER_PROPERTY:
         ldx     #$FF                            ;
         lda     #$1B                            ; Store escape character at the end of the RECITER buffer.
         sta     RECITER_BUFFER,x                ;
-        jsr     L4742                           ;
+        jsr     SUB_4742                        ;
 
 ; ----------------------------------------------------------------------------
 
-L473E:  jsr     SAM_211F                        ; Call subroutine in SAM.
+SUB_473E_SAY_PHONEMES:
+
+        jsr     SAM_SAY_PHONEMES                ; Call subroutine in SAM.
         rts                                     ; Done.
 
 ; ----------------------------------------------------------------------------
 
-L4742:  lda     #$FF                            ;
+SUB_4742:
+
+        lda     #$FF                            ;
         sta     $FA                             ;
 L4746:  lda     #$FF                            ;
         sta     $F5                             ;
@@ -130,7 +150,7 @@ L474A:  inc     $FA                             ;
         sta     $FB                             ;
         lda     #>PTAB_MISC                     ;
         sta     $FC                             ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 @3:     lda     $F6                             ;
         bne     L47C3                           ;
@@ -152,7 +172,7 @@ L47AC:  lda     #$9B                            ;
         lda     $FA                             ;
         sta     SAVE_FA                         ;
         sta     $CD                             ;
-        jsr     L473E                           ;
+        jsr     SUB_473E_SAY_PHONEMES           ;
         lda     SAVE_FA                         ;
         sta     $FA                             ;
         jmp     L4746                           ;
@@ -175,7 +195,9 @@ L47C3:  lda     $F6                             ; Verify that $F6 contains a val
 
         ; Pattern matching loop.
 
-L47DA:  ldy     #0                              ; Set Y=0 for accessing ($FB, $FC) later on.
+MATCH_NEXT:
+
+        ldy     #0                              ; Set Y=0 for accessing ($FB, $FC) later on.
 
 @1:     clc                                     ; Increment the ($FB, $FC) pointer by one.
         lda     $FB                             ;
@@ -219,7 +241,7 @@ L47F8:  sty     $FF                             ;
         lda     ($FB),y                         ;
         cmp     $F6                             ;
         beq     @4                              ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -258,7 +280,7 @@ L4843:  and     #$7F                            ;
         lda     RECITER_BUFFER,x                ;
         cmp     $F6                             ;
         beq     L485A                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -292,17 +314,17 @@ L485F:  lda     $F6                             ; Switch statement.
 @7:     cmp     #':'                            ; Handle ':' character.
         bne     @8                              ;
         jmp     SW1_COLON                       ;
-@8:     jsr     SAM_452D                        ; Any other character: call subroutine in SAM.
+@8:     jsr     SAM_ERROR_SOUND                 ; Any other character: signal error.
         brk                                     ; Unexpected return from subroutine -- abort.
 
 ; ----------------------------------------------------------------------------
 
 SW1_SPACE:
 
-        jsr     L493D                           ;
+        jsr     SUB_493D                        ;
         and     #$80                            ;
         beq     L48A7                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -313,19 +335,19 @@ L48A7:  stx     $F8                             ;
 
 SW1_HASH:
 
-        jsr     L493D                           ;
+        jsr     SUB_493D                        ;
         and     #$40                            ;
         bne     L48A7                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
 SW1_PERIOD:
 
-        jsr     L493D                           ;
+        jsr     SUB_493D                        ;
         and     #$08                            ;
         bne     L48C0                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -336,13 +358,13 @@ L48C0:  stx     $F8                             ;
 
 SW1_AMPERSAND:
 
-        jsr     L493D                           ;
+        jsr     SUB_493D                        ;
         and     #$10                            ;
         bne     L48C0                           ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     L48D6                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -352,19 +374,19 @@ L48D6:  dex                                     ;
         beq     L48C0                           ;
         cmp     #'S'                            ;
         beq     L48C0                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
 SW1_AT_SIGN:
 
-        jsr     L493D                           ;
+        jsr     SUB_493D                        ;
         and     #$04                            ;
         bne     L48C0                           ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 @1:     cmp     #'T'                            ;
         beq     @2                              ;
@@ -372,7 +394,7 @@ SW1_AT_SIGN:
         beq     @2                              ;
         cmp     #'S'                            ;
         beq     @2                              ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 @2:     stx     $F8                             ;
         jmp     L4835                           ;
@@ -381,10 +403,10 @@ SW1_AT_SIGN:
 
 SW1_CARET:
 
-        jsr     L493D                           ;
+        jsr     SUB_493D                        ;
         and     #$20                            ;
         bne     L4914                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -404,13 +426,13 @@ SW1_PLUS:
         beq     L4914                           ;
         cmp     #'Y'                            ;
         beq     L4914                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
 SW1_COLON:
 
-        jsr     L493D                           ;
+        jsr     SUB_493D                        ;
         and     #$20                            ;
         bne     @1                              ;
         jmp     L4835                           ;
@@ -420,7 +442,9 @@ SW1_COLON:
 
 ; ----------------------------------------------------------------------------
 
-L493D:  ldx     $F8                             ;
+SUB_493D:
+
+        ldx     $F8                             ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
@@ -429,7 +453,9 @@ L493D:  ldx     $F8                             ;
 
 ; ----------------------------------------------------------------------------
 
-L4948:  ldx     $F7                             ;
+SUB_4948:
+
+        ldx     $F7                             ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
@@ -493,7 +519,7 @@ L49A3:  cmp     #'I'                            ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'G'                            ;
         beq     L4972                           ;
-L49B7:  jmp     L47DA                           ;
+L49B7:  jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -519,7 +545,7 @@ L49C8:  sty     $FE                             ;
         lda     RECITER_BUFFER,x                ;
         cmp     $F6                             ;
         beq     L49E3                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -556,17 +582,17 @@ L49E8:  lda     $F6                             ; Switch statement.
 @8:     cmp     #'%'                            ; Handle '%' character.
         bne     @9                              ;
         jmp     SW2_PERCENT                     ;
-@9:     jsr     SAM_452D                        ; Any other character: call subroutine in SAM.
+@9:     jsr     SAM_ERROR_SOUND                 ; Any other character: signal error.
         brk                                     ; Unexpected return from subroutine -- abort.
 
 ; ----------------------------------------------------------------------------
 
 SW2_SPACE:
 
-        jsr     L4948                           ;
+        jsr     SUB_4948                        ;
         and     #$80                            ;
         beq     L4A37                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -577,19 +603,19 @@ L4A37:  stx     $F7                             ;
 
 SW2_HASH:
 
-        jsr     L4948                           ;
+        jsr     SUB_4948                        ;
         and     #$40                            ;
         bne     L4A37                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
 SW2_PERIOD:
 
-        jsr     L4948                           ;
+        jsr     SUB_4948                        ;
         and     #$08                            ;
         bne     L4A50                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -600,13 +626,13 @@ L4A50:  stx     $F7                             ;
 
 SW2_AMPERSAND:
 
-        jsr     L4948                           ;
+        jsr     SUB_4948                        ;
         and     #$10                            ;
         bne     L4A50                           ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 @1:     inx                                     ;
         lda     RECITER_BUFFER,x                ;
@@ -614,43 +640,39 @@ SW2_AMPERSAND:
         beq     L4A50                           ;
         cmp     #'S'                            ;
         beq     L4A50                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
 SW2_AT_SIGN:
 
-        jsr     L4948                           ;
+        jsr     SUB_4948                        ;
         and     #$04                            ;
         bne     L4A50                           ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
-        beq     L4A86                           ;
-        jmp     L47DA                           ;
+        beq     @1                              ;
+        jmp     MATCH_NEXT                      ;
 
-; ----------------------------------------------------------------------------
-
-L4A86:  cmp     #'T'                            ;
-        beq     L4A95                           ;
+@1:     cmp     #'T'                            ;
+        beq     @2                              ;
         cmp     #'C'                            ;
-        beq     L4A95                           ;
+        beq     @2                              ;
         cmp     #'S'                            ;
-        beq     L4A95                           ;
-        jmp     L47DA                           ;
+        beq     @2                              ;
+        jmp     MATCH_NEXT                      ;
 
-; ----------------------------------------------------------------------------
-
-L4A95:  stx     $F7                             ;
+@2:     stx     $F7                             ;
         jmp     L49BE                           ;
 
 ; ----------------------------------------------------------------------------
 
 SW2_CARET:
 
-        jsr     L4948                           ;
+        jsr     SUB_4948                        ;
         and     #$20                            ;
         bne     L4AA4                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -670,13 +692,13 @@ SW2_PLUS:
         beq     L4AA4                           ;
         cmp     #'Y'                            ;
         beq     L4AA4                           ;
-        jmp     L47DA                           ;
+        jmp     MATCH_NEXT                      ;
 
 ; ----------------------------------------------------------------------------
 
 SW2_COLON:
 
-        jsr     L4948                           ;
+        jsr     SUB_4948                        ;
         and     #$20                            ;
         bne     @1                              ;
         jmp     L49BE                           ;
@@ -1258,7 +1280,7 @@ TRAILER: .byte   $EA,$A0                         ; Trailing bytes -- probably no
         .segment "RECITER_BLOCK2_HEADER"
 
         ; This is the Atari executable header for the second block in the executable file.
-        ; It points to the two-byte RUNAD value used by DOS as the run address for executable files.
+        ; It points to the RUNAD pointer used by DOS as the run address for executable files.
 
         .word   __RECITER_BLOCK2_LOAD__
         .word   __RECITER_BLOCK2_LOAD__ + __RECITER_BLOCK2_SIZE__ - 1
