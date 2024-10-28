@@ -1,14 +1,14 @@
 
 .PHONY : default check
 
-check :reciter_4590_5cbd.bin
+check :reciter.bin
 	@md5sum -c MD5SUM
 
-reciter_4590_5cbd.bin : reciter_4590_5cbd.o
-	ld65 -C reciter.lnk reciter_4590_5cbd.o -o $@
+reciter.bin : reciter.o
+	ld65 -C reciter.lnk reciter.o -o $@
 
-reciter_4590_5cbd.o : reciter_4590_5cbd.s
+reciter.o : reciter.s
 	ca65 $< -o $@
 
 clean :
-	$(RM) reciter_4590_5cbd.o
+	$(RM) reciter.bin reciter.o

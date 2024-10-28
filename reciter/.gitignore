@@ -1,3 +1,2 @@
-*.info
-*.o
-*.bin
+reciter.o
+reciter.bin
