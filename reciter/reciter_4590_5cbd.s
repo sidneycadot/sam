@@ -1,7 +1,10 @@
 
 ; Source code for SAM reciter.
 ;
-; The "reciter" program performs English-to-Phonemes translation.
+; The "reciter" program performs English-to-SAM phoneme translation.
+
+        .import __RECITER_BLOCK1_LOAD__, __RECITER_BLOCK1_SIZE__
+        .import __RECITER_BLOCK2_LOAD__, __RECITER_BLOCK2_SIZE__
 
         .setcpu "6502"
 
@@ -14,21 +17,21 @@ SAM_452D        := $452D
 
 ; ----------------------------------------------------------------------------
 
-        .segment "BLOCK1_HEADER": absolute
+        .segment "RECITER_BLOCK1_HEADER"
 
         ; This is the Atari executable header for the first block.
 
-        .word $ffff
-        .word $4590
-        .word $5cbd
+        .word   $ffff
+        .word   __RECITER_BLOCK1_LOAD__
+        .word   __RECITER_BLOCK1_LOAD__ + __RECITER_BLOCK1_SIZE__ - 1
 
-        .segment "BLOCK1": absolute
+        .segment "RECITER_BLOCK1"
 
-L4590:  .res 256, 0
+L4590:  .res    256, 0
 
         .byte "COPYRIGHT 1982 DON'T ASK"
 
-L46A8:  .res 32, 0
+L46A8:  .res    32, 0
 
         .byte   $00,$02,$02,$02,$02,$02,$02,$82 ; 46C8 00 02 02 02 02 02 02 82
         .byte   $00,$00,$02,$02,$02,$02,$02,$02 ; 46D0 00 00 02 02 02 02 02 02
@@ -148,12 +151,13 @@ L47AC:  lda     #$9B                            ;
 
 ; ----------------------------------------------------------------------------
 
-L47C3:  lda     $F6                             ;
+L47C3:  lda     $F6                             ; Verify that $F6 contains a value with its most signoficant bit set.
         and     #$80                            ;
-        bne     L47CA                           ;
-        brk                                     ;
-L47CA:  lda     $FD                             ;
-        sec                                     ;
+        bne     @1                              ;
+        brk                                     ; Assertion failed!
+
+@1:     lda     $FD                             ; Load the character to be processed from $FD.
+        sec                                     ; Set ($FB, $FC) pointer to the table entry corresponding to the letter.
         sbc     #'A'                            ;
         tax                                     ;
         lda     PTAB_INDEX_LO,x                 ;
@@ -163,16 +167,18 @@ L47CA:  lda     $FD                             ;
 
         ; Pattern matching loop.
 
-L47DA:  ldy     #0                              ;
-@1:     clc                                     ; Increment pointer $FB by one.
+L47DA:  ldy     #0                              ; Set Y=0 for accessing ($FB, $FC) later on.
+
+@1:     clc                                     ; Increment the ($FB, $FC) pointer by one.
         lda     $FB                             ;
         adc     #<1                             ;
         sta     $FB                             ;
         lda     $FC                             ;
         adc     #>1                             ;
         sta     $FC                             ;
-        lda     ($FB),y                         ; load byte.
-        bpl     @1                              ; repeat increment until the value has most significant bit.
+        lda     ($FB),y                         ; Load byte at address pointed to by ($FB, $FC).
+        bpl     @1                              ; Repeat increment until we find a value with its most significant bit set.
+
         iny                                     ;
 @2:     lda     ($FB),y                         ; Find parenthesis-open character.
         cmp     #'('                            ; Is $(FB),Y a parenthesis-open character?
@@ -253,40 +259,39 @@ L485A:  stx     $F8                             ;
 
 ; ----------------------------------------------------------------------------
 
-L485F:  lda     $F6                             ;
-        cmp     #' '                            ;
+L485F:  lda     $F6                             ; Switch statement.
+        cmp     #' '                            ; Handle ' ' character.
         bne     @1                              ;
-        jmp     L489D                           ;
-@1:     cmp     #'#'                            ;
+        jmp     SW1_SPACE                       ;
+@1:     cmp     #'#'                            ; Handle '#' character.
         bne     @2                              ;
-        jmp     L48AC                           ;
-@2:     cmp     #'.'                            ;
+        jmp     SW1_HASH                        ;
+@2:     cmp     #'.'                            ; Handle '.' character.
         bne     @3                              ;
-        jmp     L48B6                           ;
-@3:     cmp     #'&'                            ;
+        jmp     SW1_PERIOD                      ;
+@3:     cmp     #'&'                            ; Handle '&' character.
         bne     @4                              ;
-        jmp     L48C5                           ;
-@4:     cmp     #'@'                            ;
+        jmp     SW1_AMPERSAND                   ;
+@4:     cmp     #'@'                            ; Handle '@' character.
         bne     @5                              ;
-        jmp     L48E5                           ;
-@5:     cmp     #'^'                            ;
+        jmp     SW1_ATSIGN                      ;
+@5:     cmp     #'^'                            ; Handle '^' character.
         bne     @6                              ;
-        jmp     L490A                           ;
-@6:     cmp     #'+'                            ;
+        jmp     SW1_CARET                       ;
+@6:     cmp     #'+'                            ; Handle '+' character.
         bne     @7                              ;
-        jmp     L4919                           ;
-@7:     cmp     #':'                            ;
-        bne     L4899                           ;
-        jmp     L492E                           ;
-
-; ----------------------------------------------------------------------------
-
-L4899:  jsr     SAM_452D                        ; Call subroutine in SAM.
+        jmp     SW1_PLUS                        ;
+@7:     cmp     #':'                            ; Handle ':' character.
+        bne     @8                              ;
+        jmp     SW1_COLON                       ;
+@8:     jsr     SAM_452D                        ; Handle any other character: call subroutine in SAM.
         brk                                     ; Yikes, let's hope we never return.
 
 ; ----------------------------------------------------------------------------
 
-L489D:  jsr     L493D                           ;
+SW1_SPACE:
+
+        jsr     L493D                           ;
         and     #$80                            ;
         beq     L48A7                           ;
         jmp     L47DA                           ;
@@ -298,14 +303,18 @@ L48A7:  stx     $F8                             ;
 
 ; ----------------------------------------------------------------------------
 
-L48AC:  jsr     L493D                           ;
+SW1_HASH:
+
+        jsr     L493D                           ;
         and     #$40                            ;
         bne     L48A7                           ;
         jmp     L47DA                           ;
 
 ; ----------------------------------------------------------------------------
 
-L48B6:  jsr     L493D                           ;
+SW1_PERIOD:
+
+        jsr     L493D                           ;
         and     #$08                            ;
         bne     L48C0                           ;
         jmp     L47DA                           ;
@@ -317,7 +326,9 @@ L48C0:  stx     $F8                             ;
 
 ; ----------------------------------------------------------------------------
 
-L48C5:  jsr     L493D                           ;
+SW1_AMPERSAND:
+
+        jsr     L493D                           ;
         and     #$10                            ;
         bne     L48C0                           ;
         lda     L4590,x                         ;
@@ -337,32 +348,32 @@ L48D6:  dex                                     ;
 
 ; ----------------------------------------------------------------------------
 
-L48E5:  jsr     L493D                           ;
+SW1_ATSIGN:
+
+        jsr     L493D                           ;
         and     #$04                            ;
         bne     L48C0                           ;
         lda     L4590,x                         ;
         cmp     #'H'                            ;
-        beq     L48F6                           ;
+        beq     @1                              ;
         jmp     L47DA                           ;
 
-; ----------------------------------------------------------------------------
-
-L48F6:  cmp     #'T'                            ;
-        beq     L4905                           ;
+@1:     cmp     #'T'                            ;
+        beq     @2                              ;
         cmp     #'C'                            ;
-        beq     L4905                           ;
+        beq     @2                              ;
         cmp     #'S'                            ;
-        beq     L4905                           ;
+        beq     @2                              ;
         jmp     L47DA                           ;
 
-; ----------------------------------------------------------------------------
-
-L4905:  stx     $F8                             ;
+@2:     stx     $F8                             ;
         jmp     L4835                           ;
 
 ; ----------------------------------------------------------------------------
 
-L490A:  jsr     L493D                           ;
+SW1_CARET:
+
+        jsr     L493D                           ;
         and     #$20                            ;
         bne     L4914                           ;
         jmp     L47DA                           ;
@@ -374,7 +385,9 @@ L4914:  stx     $F8                             ;
 
 ; ----------------------------------------------------------------------------
 
-L4919:  ldx     $F8                             ;
+SW1_PLUS:
+
+        ldx     $F8                             ;
         dex                                     ;
         lda     L4590,x                         ;
         cmp     #'E'                            ;
@@ -387,15 +400,15 @@ L4919:  ldx     $F8                             ;
 
 ; ----------------------------------------------------------------------------
 
-L492E:  jsr     L493D                           ;
+SW1_COLON:
+
+        jsr     L493D                           ;
         and     #$20                            ;
-        bne     L4938                           ;
+        bne     @1                              ;
         jmp     L4835                           ;
 
-; ----------------------------------------------------------------------------
-
-L4938:  stx     $F8                             ;
-        jmp     L492E                           ;
+@1:     stx     $F8                             ;
+        jmp     SW1_COLON                       ;
 
 ; ----------------------------------------------------------------------------
 
@@ -417,7 +430,9 @@ L4948:  ldx     $F7                             ;
 
 ; ----------------------------------------------------------------------------
 
-L4953:  ldx     $F7                             ;
+SW2_PERCENT:
+
+        ldx     $F7                             ;
         inx                                     ;
         lda     L4590,x                         ;
         cmp     #'E'                            ;
@@ -505,43 +520,42 @@ L49E3:  stx     $F7                             ;
 
 ; ----------------------------------------------------------------------------
 
-L49E8:  lda     $F6                             ;
-        cmp     #' '                            ;
+L49E8:  lda     $F6                             ; Switch statement.
+        cmp     #' '                            ; Handle ' ' character.
         bne     @1                              ;
-        jmp     L4A2D                           ;
-@1:     cmp     #'#'                            ;
+        jmp     SW2_SPACE                       ;
+@1:     cmp     #'#'                            ; Handle '#' character.
         bne     @2                              ;
-        jmp     L4A3C                           ;
-@2:     cmp     #'.'                            ;
+        jmp     SW2_HASH                        ;
+@2:     cmp     #'.'                            ; Handle '.' character.
         bne     @3                              ;
-        jmp     L4A46                           ;
-@3:     cmp     #'&'                            ;
+        jmp     SW2_PERIOD                      ;
+@3:     cmp     #'&'                            ; Handle '&' character.
         bne     @4                              ;
-        jmp     L4A55                           ;
-@4:     cmp     #'@'                            ;
+        jmp     SW2_AMPERSAND                   ;
+@4:     cmp     #'@'                            ; Handle '@' character.
         bne     @5                              ;
-        jmp     L4A75                           ;
-@5:      cmp     #'^'                           ;
+        jmp     SW2_ATSIGN                      ;
+@5:     cmp     #'^'                            ; Handle '^' character.
         bne     @6                              ;
-        jmp     L4A9A                           ;
-@6:     cmp     #'+'                            ;
+        jmp     SW2_CARET                       ;
+@6:     cmp     #'+'                            ; Handle '+' character.
         bne     @7                              ;
-        jmp     L4AA9                           ;
-@7:     cmp     #':'                            ;
+        jmp     SW2_PLUS                        ;
+@7:     cmp     #':'                            ; Handle ':' character.
         bne     @8                              ;
-        jmp     L4ABE                           ;
-@8:     cmp     #'%'                            ;
-        bne     L4A29                           ;
-        jmp     L4953                           ;
-
-; ----------------------------------------------------------------------------
-
-L4A29:  jsr     SAM_452D                        ; Call subroutine in SAM.
+        jmp     SW2_COLON                       ;
+@8:     cmp     #'%'                            ; Handle '%' character.
+        bne     @9                              ;
+        jmp     SW2_PERCENT                     ;
+@9:     jsr     SAM_452D                        ; Handle any other character: call subroutine in SAM.
         brk                                     ; Yikes, let's hope we never return.
 
 ; ----------------------------------------------------------------------------
 
-L4A2D:  jsr     L4948                           ;
+SW2_SPACE:
+
+        jsr     L4948                           ;
         and     #$80                            ;
         beq     L4A37                           ;
         jmp     L47DA                           ;
@@ -553,14 +567,18 @@ L4A37:  stx     $F7                             ;
 
 ; ----------------------------------------------------------------------------
 
-L4A3C:  jsr     L4948                           ;
+SW2_HASH:
+
+        jsr     L4948                           ;
         and     #$40                            ;
         bne     L4A37                           ;
         jmp     L47DA                           ;
 
 ; ----------------------------------------------------------------------------
 
-L4A46:  jsr     L4948                           ;
+SW2_PERIOD:
+
+        jsr     L4948                           ;
         and     #$08                            ;
         bne     L4A50                           ;
         jmp     L47DA                           ;
@@ -572,16 +590,17 @@ L4A50:  stx     $F7                             ;
 
 ; ----------------------------------------------------------------------------
 
-L4A55:  jsr     L4948                           ;
+SW2_AMPERSAND:
+
+        jsr     L4948                           ;
         and     #$10                            ;
         bne     L4A50                           ;
         lda     L4590,x                         ;
         cmp     #'H'                            ;
-        beq     L4A66                           ;
+        beq     @1                              ;
         jmp     L47DA                           ;
 
-; ----------------------------------------------------------------------------
-L4A66:  inx                                     ;
+@1:     inx                                     ;
         lda     L4590,x                         ;
         cmp     #'C'                            ;
         beq     L4A50                           ;
@@ -591,7 +610,9 @@ L4A66:  inx                                     ;
 
 ; ----------------------------------------------------------------------------
 
-L4A75:  jsr     L4948                           ;
+SW2_ATSIGN:
+
+        jsr     L4948                           ;
         and     #$04                            ;
         bne     L4A50                           ;
         lda     L4590,x                         ;
@@ -616,7 +637,9 @@ L4A95:  stx     $F7                             ;
 
 ; ----------------------------------------------------------------------------
 
-L4A9A:  jsr     L4948                           ;
+SW2_CARET:
+
+        jsr     L4948                           ;
         and     #$20                            ;
         bne     L4AA4                           ;
         jmp     L47DA                           ;
@@ -628,7 +651,9 @@ L4AA4:  stx     $F7                             ;
 
 ; ----------------------------------------------------------------------------
 
-L4AA9:  ldx     $F7                             ;
+SW2_PLUS:
+
+        ldx     $F7                             ;
         inx                                     ;
         lda     L4590,x                         ;
         cmp     #'E'                            ;
@@ -641,15 +666,15 @@ L4AA9:  ldx     $F7                             ;
 
 ; ----------------------------------------------------------------------------
 
-L4ABE:  jsr     L4948                           ;
+SW2_COLON:
+
+        jsr     L4948                           ;
         and     #$20                            ;
-        bne     L4AC8                           ;
+        bne     @1                              ;
         jmp     L49BE                           ;
 
-; ----------------------------------------------------------------------------
-
-L4AC8:  stx     $F7                             ;
-        jmp     L4ABE                           ;
+@1:     stx     $F7                             ;
+        jmp     SW2_COLON                       ;
 
 ; ----------------------------------------------------------------------------
 
@@ -677,23 +702,23 @@ L4AEB:  iny                                     ;
 
 PTAB_INDEX_LO:
 
-        .lobytes   $4CE0,$4E75,$4ED7,$4F6B,$5008,$518E,$51CF,$5247,$5290,$53EF,$5400,$5417,$545A
-        .lobytes   $54BA,$551E,$576C,$57CC,$57F2,$5813,$58FC,$5A77,$5B06,$5B23,$5BFE,$5C17,$5CAB
+        .lobytes   PTAB_A,PTAB_B,PTAB_C,PTAB_D,PTAB_E,PTAB_F,PTAB_G,PTAB_H,PTAB_I,PTAB_J,PTAB_K,PTAB_L,PTAB_M
+        .lobytes   PTAB_N,PTAB_O,PTAB_P,PTAB_Q,PTAB_R,PTAB_S,PTAB_T,PTAB_U,PTAB_V,PTAB_W,PTAB_X,PTAB_Y,PTAB_Z
 
 PTAB_INDEX_HI:
 
-        .hibytes   $4CE0,$4E75,$4ED7,$4F6B,$5008,$518E,$51CF,$5247,$5290,$53EF,$5400,$5417,$545A
-        .hibytes   $54BA,$551E,$576C,$57CC,$57F2,$5813,$58FC,$5A77,$5B06,$5B23,$5BFE,$5C17,$5CAB
+        .hibytes   PTAB_A,PTAB_B,PTAB_C,PTAB_D,PTAB_E,PTAB_F,PTAB_G,PTAB_H,PTAB_I,PTAB_J,PTAB_K,PTAB_L,PTAB_M
+        .hibytes   PTAB_N,PTAB_O,PTAB_P,PTAB_Q,PTAB_R,PTAB_S,PTAB_T,PTAB_U,PTAB_V,PTAB_W,PTAB_X,PTAB_Y,PTAB_Z
 
 ; ----------------------------------------------------------------------------
 
         ; This is the startup code.
         ; RUNAD will point here after opening the file, so exection starts here.
 
-_start: lda     #<(END_OF_BLOCK1 - 2)
+_start: lda     #<(__RECITER_BLOCK1_LOAD__ + __RECITER_BLOCK1_SIZE__ - 2)
         sta     $2E7
         sta     $864
-        lda     #>(END_OF_BLOCK1 - 2)
+        lda     #>(__RECITER_BLOCK1_LOAD__ + __RECITER_BLOCK1_SIZE__ - 2)
         sta     $2E8
         sta     $869
         lda     #0
@@ -715,8 +740,8 @@ PTAB:
 
         pronunciation_rule    "(A)="
         pronunciation_rule    "(!)=."
-        .byte   "(",'"',") =-AH5NKWOWT",'-'+$80   ; ca65 strings cannot contain a double quote (0x22) character, so write out pronunciation rule as bytes.
-        .byte   "(",'"',")=KWOW4T",'-'+$80        ; ca65 strings cannot contain a double quote (0x22) character, so write out pronunciation rule as bytes.
+        .byte                 "(",'"',") =-AH5NKWOWT",'-'+$80   ; ca65 strings cannot contain a double quote (0x22) character, so write out this pronunciation rule as bytes.
+        .byte                 "(",'"',")=KWOW4T",'-'+$80        ; ca65 strings cannot contain a double quote (0x22) character, so write out this pronunciation rule as bytes.
         pronunciation_rule    "(#)= NAH4MBER"
         pronunciation_rule    "($)= DAA4LER"
         pronunciation_rule    "(%)= PERSEH4NT"
@@ -753,7 +778,7 @@ PTAB:
         pronunciation_rule    "(?)=."
         pronunciation_rule    "(@)= AE6T"
         pronunciation_rule    "(^)= KAE4RIXT"
-        pronunciation_rule    "]A"
+PTAB_A: pronunciation_rule    "]A"
         pronunciation_rule    " (A.)=EH4Y. "
         pronunciation_rule    "(A) =AH"
         pronunciation_rule    " (ARE) =AAR"
@@ -789,11 +814,11 @@ PTAB:
         pronunciation_rule    "(ANG)+=EY4NJ"
         pronunciation_rule    "(ATARI)=AHTAA4RIY"
         pronunciation_rule    "(A)TOM=AE"
-P2:     pronunciation_rule    "(A)TTI=AE"
+        pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    " (AT) =AET"
         pronunciation_rule    " (A)T=AH"
         pronunciation_rule    "(A)=AE"
-        pronunciation_rule    "]B"
+PTAB_B: pronunciation_rule    "]B"
         pronunciation_rule    " (B) =BIY4"
         pronunciation_rule    " (BE)^#=BIH"
         pronunciation_rule    "(BEING)=BIY4IHNX"
@@ -802,7 +827,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "(BREAK)=BREY5K"
         pronunciation_rule    "(BUIL)=BIH4L"
         pronunciation_rule    "(B)=B"
-        pronunciation_rule    "]C"
+PTAB_C: pronunciation_rule    "]C"
         pronunciation_rule    " (C) =SIY4"
         pronunciation_rule    " (CH)^=K"
         pronunciation_rule    "^E(CH)=K"
@@ -819,7 +844,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "(CUIT)=KIHT"
         pronunciation_rule    "(CREA)=KRIYEY"
         pronunciation_rule    "(C)=K"
-        pronunciation_rule    "]D"
+PTAB_D: pronunciation_rule    "]D"
         pronunciation_rule    " (D) =DIY4"
         pronunciation_rule    " (DR.) =DAA4KTER"
         pronunciation_rule    "#:(DED) =DIHD"
@@ -834,7 +859,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "#(DU)A=JUW"
         pronunciation_rule    "#(DU)^#=JAX"
         pronunciation_rule    "(D)=D"
-        pronunciation_rule    "]E"
+PTAB_E: pronunciation_rule    "]E"
         pronunciation_rule    " (E) =IYIY4"
         pronunciation_rule    "#:(E) ="
         pronunciation_rule    "':^(E) ="
@@ -874,14 +899,14 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "(EU)=YUW5"
         pronunciation_rule    "(EQUAL)=IY4KWUL"
         pronunciation_rule    "(E)=EH"
-        pronunciation_rule    "]F"
+PTAB_F: pronunciation_rule    "]F"
         pronunciation_rule    " (F) =EH4F"
         pronunciation_rule    "(FUL)=FUHL"
         pronunciation_rule    "(FRIEND)=FREH5ND"
         pronunciation_rule    "(FATHER)=FAA4DHER"
         pronunciation_rule    "(F)F="
         pronunciation_rule    "(F)=F"
-        pronunciation_rule    "]G"
+PTAB_G: pronunciation_rule    "]G"
         pronunciation_rule    " (G) =JIY4"
         pronunciation_rule    "(GIV)=GIH5V"
         pronunciation_rule    " (G)I^=G"
@@ -895,7 +920,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "#(GH)="
         pronunciation_rule    " (GN)=N"
         pronunciation_rule    "(G)=G"
-        pronunciation_rule    "]H"
+PTAB_H: pronunciation_rule    "]H"
         pronunciation_rule    " (H) =EY4CH"
         pronunciation_rule    " (HAV)=/HAE6V"
         pronunciation_rule    " (HERE)=/HIYR"
@@ -903,7 +928,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "(HOW)=/HAW"
         pronunciation_rule    "(H)#=/H"
         pronunciation_rule    "(H)="
-        pronunciation_rule    "]I"
+PTAB_I: pronunciation_rule    "]I"
         pronunciation_rule    " (IN)=IHN"
         pronunciation_rule    " (I) =AY4"
         pronunciation_rule    "(I) =AY"
@@ -939,14 +964,14 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "(ICRO)=AY4KROH"
         pronunciation_rule    "(IQUE)=IY4K"
         pronunciation_rule    "(I)=IH"
-        pronunciation_rule    "]J"
+PTAB_J: pronunciation_rule    "]J"
         pronunciation_rule    " (J) =JEY4"
         pronunciation_rule    "(J)=J"
-        pronunciation_rule    "]K"
+PTAB_K: pronunciation_rule    "]K"
         pronunciation_rule    " (K) =KEY4"
         pronunciation_rule    " (K)N="
         pronunciation_rule    "(K)=K"
-        pronunciation_rule    "]L"
+PTAB_L: pronunciation_rule    "]L"
         pronunciation_rule    " (L) =EH4L"
         pronunciation_rule    "(LO)C#=LOW"
         pronunciation_rule    "L(L)="
@@ -954,7 +979,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "(LEAD)=LIYD"
         pronunciation_rule    " (LAUGH)=LAE4F"
         pronunciation_rule    "(L)=L"
-        pronunciation_rule    "]M"
+PTAB_M: pronunciation_rule    "]M"
         pronunciation_rule    " (M) =EH4M"
         pronunciation_rule    " (MR.) =MIH4STER"
         pronunciation_rule    " (MS.)=MIH5Z"
@@ -963,7 +988,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "(MACHIN)=MAHSHIY5N"
         pronunciation_rule    "M(M)="
         pronunciation_rule    "(M)=M"
-        pronunciation_rule    "]N"
+PTAB_N: pronunciation_rule    "]N"
         pronunciation_rule    " (N) =EH4N"
         pronunciation_rule    "E(NG)+=NJ"
         pronunciation_rule    "(NG)R=NXG"
@@ -975,7 +1000,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "N(N)="
         pronunciation_rule    "(NON)E=NAH4N"
         pronunciation_rule    "(N)=N"
-        pronunciation_rule    "]O"
+PTAB_O: pronunciation_rule    "]O"
         pronunciation_rule    " (O) =OH4W"
         pronunciation_rule    "(OF) =AHV"
         pronunciation_rule    " (OH) =OW5"
@@ -1035,7 +1060,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "(OSS) =AO5S"
         pronunciation_rule    "#:^(OM)=AHM"
         pronunciation_rule    "(O)=AA"
-        pronunciation_rule    "]P"
+PTAB_P: pronunciation_rule    "]P"
         pronunciation_rule    " (P) =PIY4"
         pronunciation_rule    "(PH)=F"
         pronunciation_rule    "(PEOPL)=PIY5PUL"
@@ -1046,17 +1071,17 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    " (P)N="
         pronunciation_rule    " (PROF.)=PROHFEH4SER"
         pronunciation_rule    "(P)=P"
-        pronunciation_rule    "]Q"
+PTAB_Q: pronunciation_rule    "]Q"
         pronunciation_rule    " (Q) =KYUW4"
         pronunciation_rule    "(QUAR)=KWOH5R"
         pronunciation_rule    "(QU)=KW"
         pronunciation_rule    "(Q)=K"
-        pronunciation_rule    "]R"
+PTAB_R: pronunciation_rule    "]R"
         pronunciation_rule    " (R) =AA5R"
         pronunciation_rule    " (RE)^#=RIY"
         pronunciation_rule    "(R)R="
         pronunciation_rule    "(R)=R"
-        pronunciation_rule    "]S"
+PTAB_S: pronunciation_rule    "]S"
         pronunciation_rule    " (S) =EH4S"
         pronunciation_rule    "(SH)=SH"
         pronunciation_rule    "#(SION)=ZHUN"
@@ -1082,7 +1107,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "#(SN)'=ZUN"
         pronunciation_rule    "(STLE)=SUL"
         pronunciation_rule    "(S)=S"
-        pronunciation_rule    "]T"
+PTAB_T: pronunciation_rule    "]T"
         pronunciation_rule    " (T) =TIY4"
         pronunciation_rule    " (THE) #=DHIY"
         pronunciation_rule    " (THE) =DHAX"
@@ -1115,7 +1140,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    " (TWO)=TUW"
         pronunciation_rule    "&(T)EN ="
         pronunciation_rule    "(T)=T"
-        pronunciation_rule    "]U"
+PTAB_U: pronunciation_rule    "]U"
         pronunciation_rule    " (U) =YUW4"
         pronunciation_rule    " (UN)I=YUWN"
         pronunciation_rule    " (UN)=AHN"
@@ -1132,11 +1157,11 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "#N(U)=YUW"
         pronunciation_rule    "@(U)=UW"
         pronunciation_rule    "(U)=YUW"
-        pronunciation_rule    "]V"
+PTAB_V: pronunciation_rule    "]V"
         pronunciation_rule    " (V) =VIY4"
         pronunciation_rule    "(VIEW)=VYUW5"
         pronunciation_rule    "(V)=V"
-        pronunciation_rule    "]W"
+PTAB_W: pronunciation_rule    "]W"
         pronunciation_rule    " (W) =DAH4BULYUW"
         pronunciation_rule    " (WERE)=WER"
         pronunciation_rule    "(WA)SH=WAA"
@@ -1158,11 +1183,11 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    "(WANT)=WAA5NT"
         pronunciation_rule    "ANS(WER)=ER"
         pronunciation_rule    "(W)=W"
-        pronunciation_rule    "]X"
+PTAB_X: pronunciation_rule    "]X"
         pronunciation_rule    " (X) =EH4KS"
         pronunciation_rule    " (X)=Z"
         pronunciation_rule    "(X)=KS"
-        pronunciation_rule    "]Y"
+PTAB_Y: pronunciation_rule    "]Y"
         pronunciation_rule    " (Y) =WAY4"
         pronunciation_rule    "(YOUNG)=YAHNX"
         pronunciation_rule    " (YOUR)=YOHR"
@@ -1178,7 +1203,7 @@ P2:     pronunciation_rule    "(A)TTI=AE"
         pronunciation_rule    " :(Y)^+:#=IH"
         pronunciation_rule    " :(Y)^#=AY"
         pronunciation_rule    "(Y)=IH"
-        pronunciation_rule    "]Z"
+PTAB_Z: pronunciation_rule    "]Z"
         pronunciation_rule    " (Z) =ZIY4"
         pronunciation_rule    "(Z)=Z"
 
@@ -1187,16 +1212,15 @@ P2:     pronunciation_rule    "(A)TTI=AE"
 
         .byte   $EA,$A0
 
-        END_OF_BLOCK1 = *
-
-        .segment "BLOCK2_HEADER": absolute
+        .segment "RECITER_BLOCK2_HEADER"
 
         ; This is the Atari executable header for the second block in the executable file.
         ; It points to the two-byte RUNAD value used by DOS as the run address for executable files.
 
-        .word $2e2,$2e3
+        .word   __RECITER_BLOCK2_LOAD__
+        .word   __RECITER_BLOCK2_LOAD__ + __RECITER_BLOCK2_SIZE__ - 1
 
-        .segment "BLOCK2": absolute
+        .segment "RECITER_BLOCK2"
 
         ; The content of the second block is just the run address of the code.
 
