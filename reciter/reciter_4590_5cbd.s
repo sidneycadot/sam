@@ -34,7 +34,7 @@ RECITER_BUFFER: .res 256, 0
 
         ; Properties of the 96 characters we support.
 
-CHAR_PROPERTY:
+CHARACTER_PROPERTY:
 
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00
@@ -93,51 +93,46 @@ L4742:  lda     #$FF                            ;
         sta     $FA                             ;
 L4746:  lda     #$FF                            ;
         sta     $F5                             ;
+
 L474A:  inc     $FA                             ;
         ldx     $FA                             ;
         lda     RECITER_BUFFER,x                ;
         sta     $FD                             ;
         cmp     #$1B                            ; Compare to the escape character.
-        bne     L4761                           ;
+        bne     @1                           ;
         inc     $F5                             ;
         ldx     $F5                             ;
         lda     #$9B                            ; Store end-of-line character to SAM buffer.
         sta     SAM_BUFFER,x                    ;
         rts                                     ;
 
-; ----------------------------------------------------------------------------
-
-L4761:  cmp     #'.'                            ;
-        bne     L477D                           ;
+@1:     cmp     #'.'                            ;
+        bne     @2                              ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
-        lda     CHAR_PROPERTY,y                 ;
+        lda     CHARACTER_PROPERTY,y            ;
         and     #$01                            ;
-        bne     L477D                           ;
+        bne     @2                              ;
         inc     $F5                             ;
         ldx     $F5                             ;
         lda     #'.'                            ; Store period character to SAM buffer.
         sta     SAM_BUFFER,x                    ;
         jmp     L474A                           ;
 
-; ----------------------------------------------------------------------------
-
-L477D:  lda     $FD                             ;
+@2:     lda     $FD                             ;
         tay                                     ;
-        lda     CHAR_PROPERTY,y                 ;
+        lda     CHARACTER_PROPERTY,y            ;
         sta     $F6                             ;
         and     #$02                            ;
-        beq     L4794                           ;
+        beq     @3                              ;
         lda     #<PTAB_MISC                     ;
         sta     $FB                             ;
         lda     #>PTAB_MISC                     ;
         sta     $FC                             ;
         jmp     L47DA                           ;
 
-; ----------------------------------------------------------------------------
-
-L4794:  lda     $F6                             ;
+@3:     lda     $F6                             ;
         bne     L47C3                           ;
         lda     #$20                            ;
         sta     RECITER_BUFFER,x                ;
@@ -255,7 +250,7 @@ L4835:  ldy     $FF                             ;
 
 L4843:  and     #$7F                            ;
         tax                                     ;
-        lda     CHAR_PROPERTY,x                 ;
+        lda     CHARACTER_PROPERTY,x            ;
         and     #$80                            ;
         beq     L485F                           ;
         ldx     $F8                             ;
@@ -429,7 +424,7 @@ L493D:  ldx     $F8                             ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
-        lda     CHAR_PROPERTY,y                 ;
+        lda     CHARACTER_PROPERTY,y            ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
@@ -438,7 +433,7 @@ L4948:  ldx     $F7                             ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
-        lda     CHAR_PROPERTY,y                 ;
+        lda     CHARACTER_PROPERTY,y            ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
@@ -454,7 +449,7 @@ SW2_PERCENT:
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
         dex                                     ;
-        lda     CHAR_PROPERTY,y                 ;
+        lda     CHARACTER_PROPERTY,y            ;
         and     #$80                            ;
         beq     L4972                           ;
         inx                                     ;
@@ -516,7 +511,7 @@ L49C8:  sty     $FE                             ;
         lda     ($FB),y                         ;
         sta     $F6                             ;
         tax                                     ;
-        lda     CHAR_PROPERTY,x                 ;
+        lda     CHARACTER_PROPERTY,x            ;
         and     #$80                            ;
         beq     L49E8                           ;
         ldx     $F7                             ;
