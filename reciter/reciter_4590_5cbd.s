@@ -154,14 +154,14 @@ L47AC:  lda     #$9B                            ;
 L47C3:  lda     $F6                             ; Verify that $F6 contains a value with its most signoficant bit set.
         and     #$80                            ;
         bne     @1                              ;
-        brk                                     ; Assertion failed!
+        brk                                     ; Illegal character detected -- abort.
 
 @1:     lda     $FD                             ; Load the character to be processed from $FD.
         sec                                     ; Set ($FB, $FC) pointer to the table entry corresponding to the letter.
         sbc     #'A'                            ;
         tax                                     ;
         lda     PTAB_INDEX_LO,x                 ;
-        sta     $FB                             ; 
+        sta     $FB                             ;
         lda     PTAB_INDEX_HI,x                 ;
         sta     $FC                             ;
 
@@ -274,7 +274,7 @@ L485F:  lda     $F6                             ; Switch statement.
         jmp     SW1_AMPERSAND                   ;
 @4:     cmp     #'@'                            ; Handle '@' character.
         bne     @5                              ;
-        jmp     SW1_ATSIGN                      ;
+        jmp     SW1_AT_SIGN                     ;
 @5:     cmp     #'^'                            ; Handle '^' character.
         bne     @6                              ;
         jmp     SW1_CARET                       ;
@@ -284,8 +284,8 @@ L485F:  lda     $F6                             ; Switch statement.
 @7:     cmp     #':'                            ; Handle ':' character.
         bne     @8                              ;
         jmp     SW1_COLON                       ;
-@8:     jsr     SAM_452D                        ; Handle any other character: call subroutine in SAM.
-        brk                                     ; Yikes, let's hope we never return.
+@8:     jsr     SAM_452D                        ; Any other character: call subroutine in SAM.
+        brk                                     ; Unexpected return from subroutine -- abort.
 
 ; ----------------------------------------------------------------------------
 
@@ -348,7 +348,7 @@ L48D6:  dex                                     ;
 
 ; ----------------------------------------------------------------------------
 
-SW1_ATSIGN:
+SW1_AT_SIGN:
 
         jsr     L493D                           ;
         and     #$04                            ;
@@ -535,7 +535,7 @@ L49E8:  lda     $F6                             ; Switch statement.
         jmp     SW2_AMPERSAND                   ;
 @4:     cmp     #'@'                            ; Handle '@' character.
         bne     @5                              ;
-        jmp     SW2_ATSIGN                      ;
+        jmp     SW2_AT_SIGN                     ;
 @5:     cmp     #'^'                            ; Handle '^' character.
         bne     @6                              ;
         jmp     SW2_CARET                       ;
@@ -548,8 +548,8 @@ L49E8:  lda     $F6                             ; Switch statement.
 @8:     cmp     #'%'                            ; Handle '%' character.
         bne     @9                              ;
         jmp     SW2_PERCENT                     ;
-@9:     jsr     SAM_452D                        ; Handle any other character: call subroutine in SAM.
-        brk                                     ; Yikes, let's hope we never return.
+@9:     jsr     SAM_452D                        ; Any other character: call subroutine in SAM.
+        brk                                     ; Unexpected return from subroutine -- abort.
 
 ; ----------------------------------------------------------------------------
 
@@ -610,7 +610,7 @@ SW2_AMPERSAND:
 
 ; ----------------------------------------------------------------------------
 
-SW2_ATSIGN:
+SW2_AT_SIGN:
 
         jsr     L4948                           ;
         and     #$04                            ;
@@ -681,22 +681,20 @@ SW2_COLON:
 L4ACD:  ldy     $FD                             ;
         lda     $F9                             ;
         sta     $FA                             ;
-L4AD3:  lda     ($FB),y                         ;
+@1:     lda     ($FB),y                         ;
         sta     $F6                             ;
         and     #$7F                            ;
         cmp     #'='                            ;
-        beq     L4AE4                           ;
+        beq     @2                              ;
         inc     $F5                             ;
         ldx     $F5                             ;
         sta     $2014,x                         ;
-L4AE4:  bit     $F6                             ;
-        bpl     L4AEB                           ;
+@2:     bit     $F6                             ;
+        bpl     @3                              ;
         jmp     L474A                           ;
 
-; ----------------------------------------------------------------------------
-
-L4AEB:  iny                                     ;
-        jmp     L4AD3                           ;
+@3:     iny                                     ;
+        jmp     @1                              ;
 
 ; ----------------------------------------------------------------------------
 
