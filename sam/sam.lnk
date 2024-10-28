@@ -19,7 +19,6 @@ SEGMENTS
     SAM_BLOCK3       : load = SAM_BLOCK3       , type = ro, define=yes;
 }
 
-
 # reading: 2000 .. 4650 (9809 bytes)
 # reading: 24de .. 24ff (34 bytes)
 # reading: 02e0 .. 02e1 (2 bytes) -- run address: 0x24de.
