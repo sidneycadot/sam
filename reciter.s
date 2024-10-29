@@ -1,31 +1,37 @@
 
-; Source code for SAM reciter.
+; Source code for the SAM reciter.
 ;
 ; The "reciter" program performs English-to-SAM phoneme translation.
+;
+; It is designed to be called through entry points in the SAM program.
 
-        .import __RECITER_BLOCK1_LOAD__, __RECITER_BLOCK1_SIZE__
-        .import __RECITER_BLOCK2_LOAD__, __RECITER_BLOCK2_SIZE__
+; ----------------------------------------------------------------------------
 
         .setcpu "6502"
 
 ; ----------------------------------------------------------------------------
 
-SAM_BUFFER            := $2014        ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
-SAM_SAY_PHONEMES      := $211F        ; Play the phonemes in SAM_BUFFER as sound.
-SAM_COPY_SAM_STRING   := $21B7        ; Routine to find and copy SAM$ into the SAM_BUFFER.
-SAM_SAVE_ZP_ADDRESSES := $3FC0        ; Save zero-page addresses used by SAM.
-SAM_ERROR_SOUND       := $452D        ; Routine to signal error using a distinctive error sound.
+        .import __RECITER_BLOCK1_LOAD__, __RECITER_BLOCK1_SIZE__
+        .import __RECITER_BLOCK2_LOAD__, __RECITER_BLOCK2_SIZE__
 
 ; ----------------------------------------------------------------------------
 
-                .export RUN_RECITER_FROM_BASIC_4708
-                .export RUN_RECITER_FROM_MACHINE_CODE_470B
+        .import SAM_BUFFER              ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
+        .import SAM_SAY_PHONEMES        ; Play the phonemes in SAM_BUFFER as sound.
+        .import SAM_COPY_SAM_STRING     ; Routine to find and copy SAM$ into the SAM_BUFFER.
+        .import SAM_SAVE_ZP_ADDRESSES   ; Save zero-page addresses used by SAM.
+        .import SAM_ERROR_SOUND         ; Routine to signal error using a distinctive error sound.
+
+; ----------------------------------------------------------------------------
+
+        .export RECITER_VIA_SAM_FROM_BASIC
+        .export RECITER_VIA_SAM_FROM_MACHINE_CODE
 
 ; ----------------------------------------------------------------------------
 
         .segment "RECITER_BLOCK1_HEADER"
 
-        ; This is the Atari executable header for the first block.
+        ; This is the Atari executable header for the first block, containing the reciter code and data.
 
         .word   $ffff
         .word   __RECITER_BLOCK1_LOAD__
@@ -56,14 +62,14 @@ CHARACTER_PROPERTY:
 
 ; ----------------------------------------------------------------------------
 
-RUN_RECITER_FROM_BASIC_4708:
+RECITER_VIA_SAM_FROM_BASIC:
 
         ; Reciter when entered from BASIC, through a call to the USR(8200) function.
         ; When entering here, the number of arguments is already popped from the 6502 stack.
 
         jsr     SAM_COPY_SAM_STRING             ; Call subroutine in SAM.
 
-RUN_RECITER_FROM_MACHINE_CODE_470B:
+RECITER_VIA_SAM_FROM_MACHINE_CODE:
 
         ; Reciter when entered from machine code.
         ; When entering, the string to be translated should be in the SAM_BUFFER.
@@ -146,7 +152,7 @@ L474A:  inc     $FA                             ;
         sta     $F6                             ;
         and     #$02                            ;
         beq     @3                              ;
-        lda     #<PTAB_MISC                     ;
+        lda     #<PTAB_MISC                     ; Try to match miscellaneous pronunciation rules.
         sta     $FB                             ;
         lda     #>PTAB_MISC                     ;
         sta     $FC                             ;
@@ -728,12 +734,12 @@ L4ACD:  ldy     $FD                             ;
 
 ; ----------------------------------------------------------------------------
 
-PTAB_INDEX_LO:                                  ; LSB of starting address of pronunciation rules specific to A..Z.
+PTAB_INDEX_LO:                  ; LSB of starting address of pronunciation rules specific to A..Z.
 
         .lobytes   PTAB_A,PTAB_B,PTAB_C,PTAB_D,PTAB_E,PTAB_F,PTAB_G,PTAB_H,PTAB_I,PTAB_J,PTAB_K,PTAB_L,PTAB_M
         .lobytes   PTAB_N,PTAB_O,PTAB_P,PTAB_Q,PTAB_R,PTAB_S,PTAB_T,PTAB_U,PTAB_V,PTAB_W,PTAB_X,PTAB_Y,PTAB_Z
 
-PTAB_INDEX_HI:                                  ; MSB of starting address of pronunciation rules specific to A..Z.
+PTAB_INDEX_HI:                  ; MSB of starting address of pronunciation rules specific to A..Z.
 
         .hibytes   PTAB_A,PTAB_B,PTAB_C,PTAB_D,PTAB_E,PTAB_F,PTAB_G,PTAB_H,PTAB_I,PTAB_J,PTAB_K,PTAB_L,PTAB_M
         .hibytes   PTAB_N,PTAB_O,PTAB_P,PTAB_Q,PTAB_R,PTAB_S,PTAB_T,PTAB_U,PTAB_V,PTAB_W,PTAB_X,PTAB_Y,PTAB_Z
@@ -1279,14 +1285,14 @@ TRAILER: .byte   $EA,$A0                         ; Trailing bytes -- probably no
 
         .segment "RECITER_BLOCK2_HEADER"
 
-        ; This is the Atari executable header for the second block in the executable file.
-        ; It points to the RUNAD pointer used by DOS as the run address for executable files.
+	; This is the Atari executable header for the second block in the executable file, which is a small
+	; block that sets the ""RUNAD" pointer used by DOS as the run address for executable files.
 
         .word   __RECITER_BLOCK2_LOAD__
         .word   __RECITER_BLOCK2_LOAD__ + __RECITER_BLOCK2_SIZE__ - 1
 
         .segment "RECITER_BLOCK2"
 
-        ; The content of the second block is just the run address of the code.
+        ; The content of the second block is just the run address of the code (0x4b23).
 
-        .word _start ; 0x4b23
+        .word _start

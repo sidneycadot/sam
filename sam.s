@@ -1,26 +1,31 @@
 
-; Source code for SAM, the Software Automatic Mouth
+; Source code for SAM, the Software Automatic Mouth (Atari 8-bit version).
 ;
 ; The "SAM" program renders phonetic text to sound.
+; It can also call into the companion "reciter" program to first render English text to phonemes.
 
-        .import __SAM_BLOCK1_LOAD__, __SAM_BLOCK1_SIZE__
-        .import __SAM_BLOCK2_LOAD__, __SAM_BLOCK2_SIZE__
-        .import __SAM_BLOCK3_LOAD__, __SAM_BLOCK3_SIZE__
+; ----------------------------------------------------------------------------
 
         .setcpu "6502"
 
 ; ----------------------------------------------------------------------------
 
-RUN_RECITER_FROM_BASIC_4708        := $4708
-RUN_RECITER_FROM_MACHINE_CODE_470B := $470B
+        .import __SAM_BLOCK1_LOAD__, __SAM_BLOCK1_SIZE__
+        .import __SAM_BLOCK2_LOAD__, __SAM_BLOCK2_SIZE__
+        .import __SAM_BLOCK3_LOAD__, __SAM_BLOCK3_SIZE__
 
 ; ----------------------------------------------------------------------------
 
-        .export SAM_BUFFER            ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
-        .export SAM_SAY_PHONEMES      ; Play the phonemes in SAM_BUFFER as sound.
-        .export SAM_COPY_SAM_STRING   ; Routine to find and copy SAM$ into the SAM_BUFFER.
-        .export SAM_SAVE_ZP_ADDRESSES ; Save zero-page addresses used by SAM.
-        .export SAM_ERROR_SOUND       ; Routine to signal error using a distinctive error sound.
+        .import RECITER_VIA_SAM_FROM_BASIC
+        .import RECITER_VIA_SAM_FROM_MACHINE_CODE
+
+; ----------------------------------------------------------------------------
+
+        .export SAM_BUFFER              ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
+        .export SAM_SAY_PHONEMES        ; Play the phonemes in SAM_BUFFER as sound.
+        .export SAM_COPY_SAM_STRING     ; Routine to find and copy SAM$ into the SAM_BUFFER.
+        .export SAM_SAVE_ZP_ADDRESSES   ; Save zero-page addresses used by SAM.
+        .export SAM_ERROR_SOUND         ; Routine to signal error using a distinctive error sound.
 
 ; ----------------------------------------------------------------------------
 
@@ -51,7 +56,7 @@ SAM_RUN_SAM_FROM_BASIC:
 
 SAM_RUN_SAM_FROM_MACHINE_CODE:
 
-        jmp     RUN_SAM_FROM_MACHINE_CODE                           ;
+        jmp     RUN_SAM_FROM_MACHINE_CODE       ;
 
 ; ----------------------------------------------------------------------------
 
@@ -61,7 +66,7 @@ SAM_RUN_SAM_FROM_MACHINE_CODE:
 SAM_RUN_RECITER_FROM_BASIC:
 
         pla                                     ; Pop the number of arguments from the 6502 stack that was pushed by Atari BASIC.
-        jmp     RUN_RECITER_FROM_BASIC_4708     ;
+        jmp     RECITER_VIA_SAM_FROM_BASIC      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -70,7 +75,7 @@ SAM_RUN_RECITER_FROM_MACHINE_CODE:
         ; Reciter entry point from machine code (address 0x200d).
         ; The English text is assumed to be in the SAM_BUFFER.
 
-        jmp     RUN_RECITER_FROM_MACHINE_CODE_470B                    ;
+        jmp     RECITER_VIA_SAM_FROM_MACHINE_CODE
 
 ; ----------------------------------------------------------------------------
 
