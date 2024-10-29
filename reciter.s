@@ -16,11 +16,11 @@
 
 ; ----------------------------------------------------------------------------
 
-        .import SAM_BUFFER              ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
-        .import SAM_SAY_PHONEMES        ; Play the phonemes in SAM_BUFFER as sound.
-        .import SAM_COPY_SAM_STRING     ; Routine to find and copy SAM$ into the SAM_BUFFER.
-        .import SAM_SAVE_ZP_ADDRESSES   ; Save zero-page addresses used by SAM.
-        .import SAM_ERROR_SOUND         ; Routine to signal error using a distinctive error sound.
+        .import SAM_BUFFER                      ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
+        .import SAM_SAY_PHONEMES                ; Play the phonemes in SAM_BUFFER as sound.
+        .import SAM_COPY_BASIC_SAM_STRING       ; Routine to find and copy SAM$ into the SAM_BUFFER.
+        .import SAM_SAVE_ZP_ADDRESSES           ; Save zero-page addresses used by SAM.
+        .import SAM_ERROR_SOUND                 ; Routine to signal error using a distinctive error sound.
 
 ; ----------------------------------------------------------------------------
 
@@ -67,16 +67,38 @@ RECITER_VIA_SAM_FROM_BASIC:
         ; Reciter when entered from BASIC, through a call to the USR(8200) function.
         ; When entering here, the number of arguments is already popped from the 6502 stack.
 
-        jsr     SAM_COPY_SAM_STRING             ; Call subroutine in SAM.
+        jsr     SAM_COPY_BASIC_SAM_STRING       ; Find and copy SAM$.
 
 RECITER_VIA_SAM_FROM_MACHINE_CODE:
 
         ; Reciter when entered from machine code.
         ; When entering, the string to be translated should be in the SAM_BUFFER.
 
-        jsr     SAM_SAVE_ZP_ADDRESSES           ; Call subroutine in SAM.
+        jsr     SAM_SAVE_ZP_ADDRESSES           ; Save ZP registers.
 
-        ; Copy content of SAM buffer to RECITER buffer, with a bit of character sanitization.
+        ; Copy content of SAM buffer to RECITER buffer, with some character remapping.
+
+        ; The translation performed maps the 32 highest ASCII characters (which include the lowercase letters)
+        ; down by 32.
+        ;
+        ; Consequences:
+        ;
+        ; `   (backtick)            maps to @ sign.
+        ; a-z (lowercase letters)   map  to A-Z.
+        ; {   (curly bracket open)  maps to '[' (angle bracket open).
+        ; |   (pipe)                maps to '\' (backslash).
+        ; }   (curly bracket close) maps to ']' (angle bracket close).
+        ; ~   (tilde)               maps to '^' (caret).
+        ; DEL (0x7f)                maps to '_' (underscore).
+        ;
+        ; What remains are 96 characters that need to be handled:
+        ;
+        ; * 32 ASCII control characters 0x00 .. 0x1f
+        ; * 16 characters ' ' (space), '!', '"', '#', '$', '%', '&', single-quote, '(', ')', '*', '+', ',', '-', '.', '/'
+        ; * 10 characters '0' .. '9'.
+        ; *  7 characters ':', ';', '<', '=', '>', '?', '@'
+        ; * 26 characters 'A' .. 'Z'
+        ; *  5 characters '[', '\', ']', '^', '_'
 
         lda     #' '                            ; Put a space character at the start of the RECITER buffer.
         sta     RECITER_BUFFER                  ;
@@ -87,13 +109,13 @@ RECITER_VIA_SAM_FROM_MACHINE_CODE:
         and     #$7F                            ; Set most significant bit of character to zero.
         cmp     #$70                            ;
         bcc     @1                              ;
-        and     #$5F                            ;
+        and     #$5F                            ; Characters $70..$7F: zero bit #5.
         jmp     @2                              ;
 @1:     cmp     #$60                            ;
         bcc     @2                              ;
-        and     #$4F                            ;
+        and     #$4F                            ; Characters $60..$6F: zero bits #4 and #5.
 
-@2:     sta     RECITER_BUFFER,x                ; Store translated character and proceed to the next one.
+@2:     sta     RECITER_BUFFER,x                ; Store sanitized character and proceed to the next one.
         inx                                     ;
         iny                                     ;
         cpy     #$FF                            ;
@@ -102,7 +124,8 @@ RECITER_VIA_SAM_FROM_MACHINE_CODE:
         ldx     #$FF                            ;
         lda     #$1B                            ; Store escape character at the end of the RECITER buffer.
         sta     RECITER_BUFFER,x                ;
-        jsr     SUB_4742                        ;
+
+        jsr     SUB_ENGLISH_TO_PHONEMES         ;
 
 ; ----------------------------------------------------------------------------
 
@@ -113,7 +136,9 @@ SUB_473E_SAY_PHONEMES:
 
 ; ----------------------------------------------------------------------------
 
-SUB_4742:
+SUB_ENGLISH_TO_PHONEMES:
+
+        ; Translate English text in the RECITER_BUFFER to phonemes in the SAM_BUFFER.
 
         lda     #$FF                            ;
         sta     $FA                             ;
@@ -125,7 +150,7 @@ L474A:  inc     $FA                             ;
         lda     RECITER_BUFFER,x                ;
         sta     $FD                             ;
         cmp     #$1B                            ; Compare to the escape character.
-        bne     @1                           ;
+        bne     @1                              ;
         inc     $F5                             ;
         ldx     $F5                             ;
         lda     #$9B                            ; Store end-of-line character to SAM buffer.
@@ -188,7 +213,7 @@ L47AC:  lda     #$9B                            ;
 L47C3:  lda     $F6                             ; Verify that $F6 contains a value with its most significant bit set.
         and     #$80                            ;
         bne     @1                              ;
-        brk                                     ; Illegal character detected -- abort.
+        brk                                     ; Abort.
 
 @1:     lda     $FD                             ; Load the character to be processed from $FD.
         sec                                     ; Set ($FB, $FC) pointer to the table entry corresponding to the letter.
@@ -280,22 +305,22 @@ L4843:  and     #$7F                            ;
         tax                                     ;
         lda     CHARACTER_PROPERTY,x            ;
         and     #$80                            ;
-        beq     L485F                           ;
+        beq     SW1_485F                        ;
         ldx     $F8                             ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     $F6                             ;
-        beq     L485A                           ;
+        beq     @1                              ;
         jmp     MATCH_NEXT                      ;
 
-; ----------------------------------------------------------------------------
-
-L485A:  stx     $F8                             ;
+@1:     stx     $F8                             ;
         jmp     L4835                           ;
 
 ; ----------------------------------------------------------------------------
 
-L485F:  lda     $F6                             ; Switch statement.
+SW1_485F:
+
+        lda     $F6                             ; Switch on content of $F6.
         cmp     #' '                            ; Handle ' ' character.
         bne     @1                              ;
         jmp     SW1_SPACE                       ;
@@ -321,7 +346,7 @@ L485F:  lda     $F6                             ; Switch statement.
         bne     @8                              ;
         jmp     SW1_COLON                       ;
 @8:     jsr     SAM_ERROR_SOUND                 ; Any other character: signal error.
-        brk                                     ; Unexpected return from subroutine -- abort.
+        brk                                     ; Abort.
 
 ; ----------------------------------------------------------------------------
 
@@ -488,6 +513,7 @@ SW2_PERCENT:
         lda     RECITER_BUFFER,x                ;
         cmp     #'R'                            ;
         bne     L4977                           ;
+
 L4972:  stx     $F7                             ;
         jmp     L49BE                           ;
 
@@ -534,18 +560,16 @@ L49BA:  lda     $F9                             ;
 L49BE:  ldy     $FE                             ;
         iny                                     ;
         cpy     $FD                             ;
-        bne     L49C8                           ;
+        bne     @1                              ;
         jmp     L4ACD                           ;
 
-; ----------------------------------------------------------------------------
-
-L49C8:  sty     $FE                             ;
+@1:     sty     $FE                             ;
         lda     ($FB),y                         ;
         sta     $F6                             ;
         tax                                     ;
         lda     CHARACTER_PROPERTY,x            ;
         and     #$80                            ;
-        beq     L49E8                           ;
+        beq     SW2_49E8                        ;
         ldx     $F7                             ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
@@ -560,7 +584,9 @@ L49E3:  stx     $F7                             ;
 
 ; ----------------------------------------------------------------------------
 
-L49E8:  lda     $F6                             ; Switch statement.
+SW2_49E8:
+
+        lda     $F6                             ; Switch on content of $F5.
         cmp     #' '                            ; Handle ' ' character.
         bne     @1                              ;
         jmp     SW2_SPACE                       ;
@@ -589,7 +615,7 @@ L49E8:  lda     $F6                             ; Switch statement.
         bne     @9                              ;
         jmp     SW2_PERCENT                     ;
 @9:     jsr     SAM_ERROR_SOUND                 ; Any other character: signal error.
-        brk                                     ; Unexpected return from subroutine -- abort.
+        brk                                     ; Abort.
 
 ; ----------------------------------------------------------------------------
 

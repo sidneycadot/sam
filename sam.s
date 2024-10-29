@@ -21,11 +21,11 @@
 
 ; ----------------------------------------------------------------------------
 
-        .export SAM_BUFFER              ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
-        .export SAM_SAY_PHONEMES        ; Play the phonemes in SAM_BUFFER as sound.
-        .export SAM_COPY_SAM_STRING     ; Routine to find and copy SAM$ into the SAM_BUFFER.
-        .export SAM_SAVE_ZP_ADDRESSES   ; Save zero-page addresses used by SAM.
-        .export SAM_ERROR_SOUND         ; Routine to signal error using a distinctive error sound.
+        .export SAM_BUFFER                      ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
+        .export SAM_SAY_PHONEMES                ; Play the phonemes in SAM_BUFFER as sound.
+        .export SAM_COPY_BASIC_SAM_STRING       ; Routine to find and copy SAM$ into the SAM_BUFFER.
+        .export SAM_SAVE_ZP_ADDRESSES           ; Save zero-page addresses used by SAM.
+        .export SAM_ERROR_SOUND                 ; Routine to signal error using a distinctive error sound.
 
 ; ----------------------------------------------------------------------------
 
@@ -98,9 +98,9 @@ SAM_BUFFER:
 
 ; ----------------------------------------------------------------------------
 
-RUN_SAM_FROM_BASIC:
+RUN_SAM_FROM_BASIC:             ; Entry point from BASIC (after PLA).
 
-        jsr     SAM_COPY_SAM_STRING             ; Entry point from BASIC (after PLA).
+        jsr     SAM_COPY_BASIC_SAM_STRING       ; Find and copy SAM$.
         lda     $CB                             ; Is result zero (good?)
         beq     RUN_SAM_FROM_MACHINE_CODE       ; Yes! Play the phonemes.
         rts                                     ; Return to BASIC.
@@ -186,7 +186,7 @@ SAM_SAY_PHONEMES:                               ; Note: entry point for the reci
 
 ; ----------------------------------------------------------------------------
 
-SAM_COPY_SAM_STRING:                            ; Note: entry point for the reciter.
+SAM_COPY_BASIC_SAM_STRING:
 
         ; This subroutine searches the BASIC variable SAM$.
         ;
