@@ -1,0 +1,31 @@
+
+MEMORY
+{
+    SAM_BLOCK1_HEADER: start = $0200, size =    6, file = "sam.xex";
+    SAM_BLOCK1       : start = $2000, size = 9809, file = "sam.xex";
+    SAM_BLOCK2_HEADER: start = $0200, size =    4, file = "sam.xex";
+    SAM_BLOCK2       : start = $24de, size =   34, file = "sam.xex";
+    SAM_BLOCK3_HEADER: start = $0200, size =    4, file = "sam.xex";
+    SAM_BLOCK3       : start = $02e0, size =    2, file = "sam.xex";
+
+    RECITER_BLOCK1_HEADER: start = $0200, size =    6, file = "reciter.xex";
+    RECITER_BLOCK1       : start = $4590, size = 5934, file = "reciter.xex";
+    RECITER_BLOCK2_HEADER: start = $0200, size =    4, file = "reciter.xex";
+    RECITER_BLOCK2       : start = $02e2, size =    2, file = "reciter.xex";
+
+}
+
+SEGMENTS
+{
+    SAM_BLOCK1_HEADER: load = SAM_BLOCK1_HEADER, type = ro;
+    SAM_BLOCK1       : load = SAM_BLOCK1       , type = ro, define=yes;
+    SAM_BLOCK2_HEADER: load = SAM_BLOCK2_HEADER, type = ro;
+    SAM_BLOCK2       : load = SAM_BLOCK2       , type = ro, define=yes;
+    SAM_BLOCK3_HEADER: load = SAM_BLOCK3_HEADER, type = ro;
+    SAM_BLOCK3       : load = SAM_BLOCK3       , type = ro, define=yes;
+
+    RECITER_BLOCK1_HEADER: load = RECITER_BLOCK1_HEADER, type = ro;
+    RECITER_BLOCK1       : load = RECITER_BLOCK1       , type = ro, define=yes;
+    RECITER_BLOCK2_HEADER: load = RECITER_BLOCK2_HEADER, type = ro;
+    RECITER_BLOCK2       : load = RECITER_BLOCK2       , type = ro, define=yes;
+}
