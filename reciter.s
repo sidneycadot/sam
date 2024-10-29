@@ -9,7 +9,7 @@
 
         .setcpu "6502"
 
-        ; We enable ca65's "string_escape" feature to allow exscaped quotes in pronunciation rules.
+        ; We enable ca65's "string_escape" feature to allow escaped quotes in pronunciation rules.
         .feature string_escapes
 
 ; ----------------------------------------------------------------------------
@@ -58,24 +58,88 @@ RECITER_BUFFER: .res 256, 0
 
         .byte "COPYRIGHT 1982 DON'T ASK"
 
-        ; Properties of the 96 characters we support.
-
 ; ----------------------------------------------------------------------------
 
 CHARACTER_PROPERTY:
 
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00
-        .byte   $00,$02,$02,$02,$02,$02,$02,$82
-        .byte   $00,$00,$02,$02,$02,$02,$02,$02
-        .byte   $03,$03,$03,$03,$03,$03,$03,$03
-        .byte   $03,$03,$02,$02,$02,$02,$02,$02
-        .byte   $02,$C0,$A8,$B0,$AC,$C0,$A0,$B8
-        .byte   $A0,$C0,$BC,$A0,$AC,$A8,$AC,$C0
-        .byte   $A0,$A0,$AC,$B4,$A4,$C0,$A8,$A8
-        .byte   $B0,$C0,$BC,$00,$00,$00,$02,$00
+        ; Properties of the 96 characters we support.
+        ;
+        ; Value 0x00: ignore the character
+        ; bit 0 (%00000001): 0-9                                                  (digits)
+        ; bit 1 (%00000010): ! " # $ % & ' * + , - . 0-9 : ; < = > ? @ ^          (special characters and digits)
+        ; bit 2 (%00000100):       D           J L     N       R S T           Z
+        ; bit 3 (%00001000):   B   D     G     J L M   N       R       V W     Z
+        ; bit 4 (%00010000):     C       G     J                 S         X   Z
+        ; bit 5 (%00100000):   B C D   F G H   J K L M N   P Q R S T   V W X   Z  (consonants)
+        ; bit 6 (%01000000): A       E       I           O           U       Y    (vowels)
+        ; bit 7 (%10000000): ' A-Z                                                (single quote and all letters)
+
+        .res 32,%00000000                       ; ASCII control characters 0x00..0x1F are all 0x00 (ignore).
+
+        .byte   %00000000                       ; space
+        .byte   %00000010                       ; !
+        .byte   %00000010                       ; "
+        .byte   %00000010                       ; #
+        .byte   %00000010                       ; $
+        .byte   %00000010                       ; %
+        .byte   %00000010                       ; &
+        .byte   %10000010                       ; '     -- Note that the single quote has bit 7 set, like the letters A-Z.
+        .byte   %00000000                       ; (     -- ignore.
+        .byte   %00000000                       ; )     -- ignore.
+        .byte   %00000010                       ; *
+        .byte   %00000010                       ; +
+        .byte   %00000010                       ; ,
+        .byte   %00000010                       ; -
+        .byte   %00000010                       ; .
+        .byte   %00000010                       ; /
+        .byte   %00000011                       ; 0
+        .byte   %00000011                       ; 1
+        .byte   %00000011                       ; 2
+        .byte   %00000011                       ; 3
+        .byte   %00000011                       ; 4
+        .byte   %00000011                       ; 5
+        .byte   %00000011                       ; 6
+        .byte   %00000011                       ; 7
+        .byte   %00000011                       ; 8
+        .byte   %00000011                       ; 9
+        .byte   %00000010                       ; :
+        .byte   %00000010                       ; ;
+        .byte   %00000010                       ; <
+        .byte   %00000010                       ; =
+        .byte   %00000010                       ; >
+        .byte   %00000010                       ; ?
+        .byte   %00000010                       ; @
+        .byte   %11000000                       ; A
+        .byte   %10101000                       ; B
+        .byte   %10110000                       ; C
+        .byte   %10101100                       ; D
+        .byte   %11000000                       ; E
+        .byte   %10100000                       ; F
+        .byte   %10111000                       ; G
+        .byte   %10100000                       ; H
+        .byte   %11000000                       ; I
+        .byte   %10111100                       ; J
+        .byte   %10100000                       ; K
+        .byte   %10101100                       ; L
+        .byte   %10101000                       ; M
+        .byte   %10101100                       ; N
+        .byte   %11000000                       ; O
+        .byte   %10100000                       ; P
+        .byte   %10100000                       ; Q
+        .byte   %10101100                       ; R
+        .byte   %10110100                       ; S
+        .byte   %10100100                       ; T
+        .byte   %11000000                       ; U
+        .byte   %10101000                       ; V
+        .byte   %10101000                       ; W
+        .byte   %10110000                       ; X
+        .byte   %11000000                       ; Y
+        .byte   %10111100                       ; Z
+        .byte   %00000000                       ; [    -- ignore.
+        .byte   %00000000                       ; \    -- ignore.
+        .byte   %00000000                       ; ]    -- ignore.
+        .byte   %00000010                       ; ^
+        .byte   %00000000                       ; _    -- ignore.
 
 ; ----------------------------------------------------------------------------
 
@@ -206,7 +270,7 @@ L474A:  inc     $FA                             ;
 
 @3:     lda     $F6                             ;
         bne     L47C3                           ;
-        lda     #$20                            ;
+        lda     #' '                            ; Space scharacter.
         sta     RECITER_BUFFER,x                ;
         inc     $F5                             ;
         ldx     $F5                             ;
@@ -295,20 +359,14 @@ L47F8:  sty     $FF                             ;
         beq     @4                              ;
         jmp     MATCH_NEXT                      ;
 
-; ----------------------------------------------------------------------------
-
 @4:     iny                                     ;
         cpy     $FE                             ;
         bne     @5                              ;
         jmp     @6                              ;
 
-; ----------------------------------------------------------------------------
-
 @5:     inx                                     ;
         stx     $F9                             ;
         jmp     @3                              ;
-
-; ----------------------------------------------------------------------------
 
 @6:     lda     $FA                             ;
         sta     $F8                             ;
@@ -373,7 +431,7 @@ SW1_485F:
 
 SW1_SPACE:
 
-        jsr     SUB_493D                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$80                            ;
         beq     L48A7                           ;
         jmp     MATCH_NEXT                      ;
@@ -387,16 +445,16 @@ L48A7:  stx     $F8                             ;
 
 SW1_HASH:
 
-        jsr     SUB_493D                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$40                            ;
-        bne     L48A7                           ;
-        jmp     MATCH_NEXT                      ;
+        bne     L48A7                           ; vowel: go to L48A7
+        jmp     MATCH_NEXT                      ; non-vowel.
 
 ; ----------------------------------------------------------------------------
 
 SW1_PERIOD:
 
-        jsr     SUB_493D                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$08                            ;
         bne     L48C0                           ;
         jmp     MATCH_NEXT                      ;
@@ -410,17 +468,15 @@ L48C0:  stx     $F8                             ;
 
 SW1_AMPERSAND:
 
-        jsr     SUB_493D                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$10                            ;
         bne     L48C0                           ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
-        beq     L48D6                           ;
+        beq     @1                              ;
         jmp     MATCH_NEXT                      ;
 
-; ----------------------------------------------------------------------------
-
-L48D6:  dex                                     ;
+@1:     dex                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'C'                            ;
         beq     L48C0                           ;
@@ -432,7 +488,7 @@ L48D6:  dex                                     ;
 
 SW1_AT_SIGN:
 
-        jsr     SUB_493D                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$04                            ;
         bne     L48C0                           ;
         lda     RECITER_BUFFER,x                ;
@@ -455,10 +511,10 @@ SW1_AT_SIGN:
 
 SW1_CARET:
 
-        jsr     SUB_493D                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$20                            ;
-        bne     L4914                           ;
-        jmp     MATCH_NEXT                      ;
+        bne     L4914                           ; consonant.
+        jmp     MATCH_NEXT                      ; non-consonant.
 
 ; ----------------------------------------------------------------------------
 
@@ -484,17 +540,17 @@ SW1_PLUS:
 
 SW1_COLON:
 
-        jsr     SUB_493D                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$20                            ;
-        bne     @1                              ;
-        jmp     L4835                           ;
+        bne     @1                              ; consonant.
+        jmp     L4835                           ; non-consonant.
 
 @1:     stx     $F8                             ;
         jmp     SW1_COLON                       ;
 
 ; ----------------------------------------------------------------------------
 
-SUB_493D:
+SUB_GET_CHAR_PROPERTY_F8_PREV:
 
         ldx     $F8                             ;
         dex                                     ;
@@ -505,7 +561,7 @@ SUB_493D:
 
 ; ----------------------------------------------------------------------------
 
-SUB_4948:
+SUB_GET_CHAR_PROPERTY_F7_NEXT:
 
         ldx     $F7                             ;
         inx                                     ;
@@ -545,13 +601,13 @@ L4977:  cmp     #'S'                            ;
         cmp     #'D'                            ;
         beq     L4972                           ;
         cmp     #'L'                            ;
-        bne     L498D                           ;
+        bne     @1                              ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'Y'                            ;
         bne     L49B7                           ;
         beq     L4972                           ;
-L498D:  cmp     #'F'                            ;
+@1:     cmp     #'F'                            ;
         bne     L49B7                           ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
@@ -642,7 +698,7 @@ SW2_49E8:
 
 SW2_SPACE:
 
-        jsr     SUB_4948                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$80                            ;
         beq     L4A37                           ;
         jmp     MATCH_NEXT                      ;
@@ -656,16 +712,16 @@ L4A37:  stx     $F7                             ;
 
 SW2_HASH:
 
-        jsr     SUB_4948                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$40                            ;
-        bne     L4A37                           ;
-        jmp     MATCH_NEXT                      ;
+        bne     L4A37                           ; vowel: go to L4A37.
+        jmp     MATCH_NEXT                      ; non-vowel
 
 ; ----------------------------------------------------------------------------
 
 SW2_PERIOD:
 
-        jsr     SUB_4948                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$08                            ;
         bne     L4A50                           ;
         jmp     MATCH_NEXT                      ;
@@ -679,7 +735,7 @@ L4A50:  stx     $F7                             ;
 
 SW2_AMPERSAND:
 
-        jsr     SUB_4948                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$10                            ;
         bne     L4A50                           ;
         lda     RECITER_BUFFER,x                ;
@@ -699,7 +755,7 @@ SW2_AMPERSAND:
 
 SW2_AT_SIGN:
 
-        jsr     SUB_4948                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$04                            ;
         bne     L4A50                           ;
         lda     RECITER_BUFFER,x                ;
@@ -722,10 +778,10 @@ SW2_AT_SIGN:
 
 SW2_CARET:
 
-        jsr     SUB_4948                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$20                            ;
-        bne     L4AA4                           ;
-        jmp     MATCH_NEXT                      ;
+        bne     L4AA4                           ; consonant.
+        jmp     MATCH_NEXT                      ; non-consonant.
 
 ; ----------------------------------------------------------------------------
 
@@ -751,10 +807,10 @@ SW2_PLUS:
 
 SW2_COLON:
 
-        jsr     SUB_4948                        ;
+        jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$20                            ;
-        bne     @1                              ;
-        jmp     L49BE                           ;
+        bne     @1                              ; consonant.
+        jmp     L49BE                           ; non-consonant.
 
 @1:     stx     $F7                             ;
         jmp     SW2_COLON                       ;

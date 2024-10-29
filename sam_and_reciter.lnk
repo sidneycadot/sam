@@ -1,4 +1,6 @@
 
+# Memory and segment definitions for SAM.
+
 MEMORY
 {
     SAM_BLOCK1_HEADER: start = $0200, size =    6, file = "sam.xex";
@@ -7,14 +9,6 @@ MEMORY
     SAM_BLOCK2       : start = $24de, size =   34, file = "sam.xex";
     SAM_BLOCK3_HEADER: start = $0200, size =    4, file = "sam.xex";
     SAM_BLOCK3       : start = RUNAD, size =    2, file = "sam.xex";
-}
-
-MEMORY
-{
-    RECITER_BLOCK1_HEADER: start = $0200 , size =    6, file = "reciter.xex";
-    RECITER_BLOCK1       : start = $4590 , size = 5934, file = "reciter.xex";
-    RECITER_BLOCK2_HEADER: start = $0200 , size =    4, file = "reciter.xex";
-    RECITER_BLOCK2       : start = INITAD, size =    2, file = "reciter.xex";
 }
 
 SEGMENTS
@@ -27,6 +21,16 @@ SEGMENTS
     SAM_BLOCK3       : load = SAM_BLOCK3       , type = ro, define=yes;
 }
 
+# Memory and segment definitions for Reciter.
+
+MEMORY
+{
+    RECITER_BLOCK1_HEADER: start = $0200 , size =    6, file = "reciter.xex";
+    RECITER_BLOCK1       : start = $4590 , size = 5934, file = "reciter.xex";
+    RECITER_BLOCK2_HEADER: start = $0200 , size =    4, file = "reciter.xex";
+    RECITER_BLOCK2       : start = INITAD, size =    2, file = "reciter.xex";
+}
+
 SEGMENTS
 {
     RECITER_BLOCK1_HEADER: load = RECITER_BLOCK1_HEADER, type = ro;
@@ -35,7 +39,10 @@ SEGMENTS
     RECITER_BLOCK2       : load = RECITER_BLOCK2       , type = ro, define=yes;
 }
 
-SYMBOLS {
-    RUNAD  : type=import;
-    INITAD : type=import;
+# Symbols for run- and initialization addresses.
+
+SYMBOLS
+{
+    RUNAD  : type = import;
+    INITAD : type = import;
 }
