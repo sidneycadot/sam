@@ -16,6 +16,22 @@
 
 ; ----------------------------------------------------------------------------
 
+        .importzp WARMST
+        .importzp POKMSK
+        .importzp RTCLOK
+        .importzp VNTP
+        .importzp VNTD
+        .importzp VVTP
+        .importzp STARP
+        .import MEMLO
+        .import BASIC
+        .import AUDC1
+        .import IRQEN
+        .import DMACTL
+        .import NMIEN
+
+; ----------------------------------------------------------------------------
+
         .import RECITER_VIA_SAM_FROM_BASIC
         .import RECITER_VIA_SAM_FROM_MACHINE_CODE
 
@@ -43,6 +59,8 @@
 
         ; SAM entry point from BASIC (address 8192).
         ; SAM$ is assumed to contain a string holding phonemes.
+
+; ----------------------------------------------------------------------------
 
 SAM_RUN_SAM_FROM_BASIC:
 
@@ -128,8 +146,8 @@ SAM_SAY_PHONEMES:                               ; Note: entry point for the reci
         jsr     SUB_279A                        ;
 
         lda     #0                              ; Init hardware.
-        sta     $D40E                           ;
-        sta     $D20E                           ;
+        sta     NMIEN                           ; Disable NMI interrupts.
+        sta     IRQEN                           ; Disable IRQ interrupts.
 
         lda     D2012                           ; Select Codepath #1 or Codepath #2.
         beq     @1                              ;
@@ -146,7 +164,7 @@ SAM_SAY_PHONEMES:                               ; Note: entry point for the reci
         jmp     @2                              ;
 
 @1:     lda     #0                              ; Codepath #2
-        sta     $D400                           ;
+        sta     DMACTL                          ; Disable DMA (Antic)
 
         lda     #$10                            ; Update self-modifying code values.
         sta     SMC4210                         ;
@@ -179,9 +197,9 @@ SAM_SAY_PHONEMES:                               ; Note: entry point for the reci
 
 @5:     jsr     SAM_RESTORE_ZP_ADDRESSES        ;
         lda     #$FF                            ;
-        sta     $D40E                           ;
-        lda     $10                             ;
-        sta     $D20E                           ;
+        sta     NMIEN                           ; Enable NMI interrupts.
+        lda     POKMSK                          ; Load IRQ enabled mask.
+        sta     IRQEN                           ; Enable IRQ interrupts.
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
@@ -198,14 +216,14 @@ SAM_COPY_BASIC_SAM_STRING:
         sta     $CC                             ;
         sta     $CD                             ;
 
-        lda     $82                             ; Copy pointer ($82, $83) to ($CE, $CF).
+        lda     VNTP                            ; Copy variable name table pointer VNTP to ($CE, $CF).
         sta     $CE                             ;
-        lda     $83                             ;
+        lda     VNTP+1                          ;
         sta     $CF                             ;
 
-        lda     $8C                             ; Copy pointer ($8C, $8D) to ($D0, $D1).
+        lda     STARP                           ; String and array pointer STARP to ($D0, $D1).
         sta     $D0                             ;
-        lda     $8D                             ;
+        lda     STARP+1                         ;
         sta     $D1                             ;
 
 @check_variable:
@@ -231,10 +249,10 @@ SAM_COPY_BASIC_SAM_STRING:
 @not_found_here:
 
         lda     $CE                             ; Check if pointer ($CE, $CF) is identical to ($84, $85), which
-        cmp     $84                             ; is the end of BASIC variable memory.
+        cmp     VNTD                            ; is the end of BASIC variable memory.
         bne     @continue_search                ;
         lda     $CF                             ; If not equal, proceed at @3.
-        cmp     $85                             ; If equal, we've reached the end of the BASIC program; go to @end.
+        cmp     VNTD+1                          ; If equal, we've reached the end of the BASIC program; go to @end.
         beq     @report_error                   ;
 
 @continue_search:
@@ -260,10 +278,10 @@ SAM_COPY_BASIC_SAM_STRING:
 
         clc                                     ; Add pointer ($86, $87).
         lda     $CB                             ;
-        adc     $86                             ;
+        adc     VVTP                            ;
         sta     $CB                             ;
         lda     $CC                             ;
-        adc     $87                             ;
+        adc     VVTP+1                          ;
         sta     $CC                             ;
 
         ldy     #5                              ; If size of string exceeds 255, report error.
@@ -1746,7 +1764,7 @@ SAM_SAVE_ZP_ADDRESSES:
 SAM_RESTORE_ZP_ADDRESSES:
 
         ; Restore zero page addresses $E1..$FF.
-        ; Note that address $E0 is not saved. (Bug?)
+        ; Note that address $E0 is not restored. (Bug?)
 
         ldx     #$1F                            ;
 @loop:  lda     D2A4F,x                         ;
@@ -1764,7 +1782,7 @@ SUB_3FD6:
         bne     @1                              ;
         rts                                     ;
 
-@1:     lda     #$00                            ;
+@1:     lda     #0                              ;
         tax                                     ;
         sta     $E9                             ;
 L3FE3:  ldy     $E9                             ;
@@ -1776,11 +1794,11 @@ L3FE3:  ldy     $E9                             ;
 
 ; ----------------------------------------------------------------------------
 
-@100:   cmp     #$01                            ;
+@100:   cmp     #1                              ;
         bne     @101                            ;
         jmp     L42F5                           ;
 
-@101:   cmp     #$02                            ;
+@101:   cmp     #2                              ;
         bne     L3FFF                           ;
         jmp     L42FB                           ;
 
@@ -2058,7 +2076,7 @@ L41CE:  lda     D3500,y                         ;
         lsr     a                               ;
         lsr     a                               ;
         ora     #$10                            ;
-        sta     $D201                           ;
+        sta     AUDC1                           ;
 
 SMC4210 := * + 1                                ; Self-modifying code: argument of ldx #imm below.
 
@@ -2163,17 +2181,17 @@ L4299:  lda     #$08                            ;
 L429F:  asl     a                               ;
         bcc     @100                            ;
         ldx     $F2                             ;
-        stx     $D201                           ;
+        stx     AUDC1                           ;
         bne     @101                            ;
 @100:   ldx     #$15                            ;
-        stx     $D201                           ;
+        stx     AUDC1                           ;
         nop                                     ;
 @101:
 
 SMC42B0 := * + 1                                ; Self-modifying code: argument of ldx #imm below.
 
         ldx     #$0D                            ;
-@102:  dex                                      ;
+@102:   dex                                     ;
         bne     @102                            ;
         dec     $F5                             ;
         bne     L429F                           ;
@@ -2195,10 +2213,10 @@ L42C8:  lda     #$08                            ;
 L42CE:  asl     a                               ;
         bcc     @100                            ;
         ldx     #$1A                            ;
-        stx     $D201                           ;
+        stx     AUDC1                           ;
         bne     @101                            ;
 @100:   ldx     #$16                            ;
-        stx     $D201                           ;
+        stx     AUDC1                           ;
         nop                                     ;
 @101:
 
@@ -2326,8 +2344,11 @@ SUB_4336:
 
 ; ----------------------------------------------------------------------------
 
-        nop                                     ; 43A8 EA                       .
-D43A9:  .byte   $07                             ; 43A9 07                       .
+        nop                                     ; 0xea (probably not used).
+
+; ----------------------------------------------------------------------------
+
+D43A9:  .byte   $07                             ;
 
 ; ----------------------------------------------------------------------------
 
@@ -2543,7 +2564,7 @@ SAM_ERROR_SOUND:
 
         lda     #2                              ;
         sta     $CC                             ;
-@1:     lda     $14                             ;
+@1:     lda     RTCLOK+2                        ; Load LSB of VBLANK counter.
         clc                                     ;
         adc     #$08                            ;
         tax                                     ;
@@ -2557,7 +2578,7 @@ SAM_ERROR_SOUND:
         ldy     #$F0                            ;
 @4:     dey                                     ;
         bne     @4                              ;
-        cpx     $14                             ;
+        cpx     RTCLOK+2                        ; Compare to LSB of VBLANK counter.
         bne     @2                              ;
         dec     $CC                             ;
         beq     @6                              ;
@@ -2565,7 +2586,7 @@ SAM_ERROR_SOUND:
         clc                                     ;
         adc     #$05                            ;
         tax                                     ;
-@5:     cpx     $14                             ;
+@5:     cpx     RTCLOK+2                        ; Compare to LSB of VBLANK counter.
         bne     @5                              ;
         jmp     @1                              ;
 
@@ -2573,47 +2594,36 @@ SAM_ERROR_SOUND:
 
 ; ----------------------------------------------------------------------------
 
+        ; Seems unused. Probably garbage.
+
         .byte   $A9,$00,$00,$00,$00,$00,$00,$00 ; 4560 A9 00 00 00 00 00 00 00  ........
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4568 00 00 00 00 00 00 00 00  ........
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4570 00 00 00 00 00 00 00 00  ........
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4578 00 00 00 00 00 00 00 00  ........
         .byte   $00,$00,$00,$00,$00,$00         ; 4580 00 00 00 00 00 00        ......
 
+; ----------------------------------------------------------------------------
+
+        ; The "MEMLO" variable is reset to here.
+        ; Whatever follows is probably garbage.
+
 D4586:  .byte                           $00,$00 ; 4586                   00 00        ..
         .byte   $42,$01,$78,$03,$00,$00,$00,$00 ; 4588 42 01 78 03 00 00 00 00  B.x.....
 
-D4590:  ; This is where the reciter executable image starts.
-        ; The data below is suspected to be cruft.
-
-        .byte   $41,$81,$92,$00,$00,$00,$30,$2E ; 4590 41 81 92 00 00 00 30 2E  A.....0.
-        .byte   $30,$16,$00,$00,$14,$27,$2A,$1C ; 4598 30 16 00 00 14 27 2A 1C  0....'*.
-        .byte   $0E,$40,$01,$00,$00,$00,$00,$12 ; 45A0 0E 40 01 00 00 00 00 12  .@......
-        .byte   $46,$3A,$80,$2C,$14,$2B,$09,$80 ; 45A8 46 3A 80 2C 14 2B 09 80  F:.,.+..
-        .byte   $16,$00,$00,$00,$00,$00,$00,$00 ; 45B0 16 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 45B8 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 45C0 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 45C8 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 45D0 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 45D8 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 45E0 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 45E8 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 45F0 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 45F8 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4600 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4608 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4610 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4618 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4620 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4628 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4630 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4638 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4640 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 4648 00 00 00 00 00 00 00 00  ........
-        .byte   $00                             ; 4650 00                       .
-
 ; ----------------------------------------------------------------------------
 
-BASIC := $A000
+D4590:  ; This is where the reciter executable image starts.
+        ; The data below is probably garbage.
+
+        .byte   $41,$81,$92,$00,$00,$00,$30,$2E
+        .byte   $30,$16,$00,$00,$14,$27,$2A,$1C
+        .byte   $0E,$40,$01,$00,$00,$00,$00,$12
+        .byte   $46,$3A,$80,$2C,$14,$2B,$09,$80
+        .byte   $16
+
+        .res 160, 0
+
+; ----------------------------------------------------------------------------
 
         .segment "SAM_BLOCK2_HEADER"
 
@@ -2625,13 +2635,13 @@ BASIC := $A000
         .segment  "SAM_BLOCK2"
 
 _start: lda     #<D4586                         ;
-        sta     $2E7                            ;
+        sta     MEMLO                           ;
         sta     $864                            ;
         lda     #>D4586                         ;
-        sta     $2E8                            ;
+        sta     MEMLO+1                         ;
         sta     $869                            ;
         lda     #0                              ;
-        sta     $08                             ;
+        sta     WARMST                          ;
         jmp     BASIC                           ; Jump into BASIC.
 
         .res 11, 0                              ; Trailing nonsense.

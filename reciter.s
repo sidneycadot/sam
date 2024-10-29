@@ -9,10 +9,19 @@
 
         .setcpu "6502"
 
+        ; We enable ca65's "string_escape" feature to allow exscaped quotes in pronunciation rules.
+        .feature string_escapes
+
 ; ----------------------------------------------------------------------------
 
         .import __RECITER_BLOCK1_LOAD__, __RECITER_BLOCK1_SIZE__
         .import __RECITER_BLOCK2_LOAD__, __RECITER_BLOCK2_SIZE__
+
+; ----------------------------------------------------------------------------
+
+        .importzp WARMST
+        .import MEMLO
+        .import BASIC
 
 ; ----------------------------------------------------------------------------
 
@@ -37,13 +46,21 @@
         .word   __RECITER_BLOCK1_LOAD__
         .word   __RECITER_BLOCK1_LOAD__ + __RECITER_BLOCK1_SIZE__ - 1
 
+; ----------------------------------------------------------------------------
+
         .segment "RECITER_BLOCK1"
 
+; ----------------------------------------------------------------------------
+
 RECITER_BUFFER: .res 256, 0
+
+; ----------------------------------------------------------------------------
 
         .byte "COPYRIGHT 1982 DON'T ASK"
 
         ; Properties of the 96 characters we support.
+
+; ----------------------------------------------------------------------------
 
 CHARACTER_PROPERTY:
 
@@ -68,6 +85,8 @@ RECITER_VIA_SAM_FROM_BASIC:
         ; When entering here, the number of arguments is already popped from the 6502 stack.
 
         jsr     SAM_COPY_BASIC_SAM_STRING       ; Find and copy SAM$.
+
+; ----------------------------------------------------------------------------
 
 RECITER_VIA_SAM_FROM_MACHINE_CODE:
 
@@ -144,6 +163,8 @@ SUB_ENGLISH_TO_PHONEMES:
         sta     $FA                             ;
 L4746:  lda     #$FF                            ;
         sta     $F5                             ;
+
+; ----------------------------------------------------------------------------
 
 L474A:  inc     $FA                             ;
         ldx     $FA                             ;
@@ -778,20 +799,20 @@ PTAB_INDEX_HI:                  ; MSB of starting address of pronunciation rules
         ; Store TRAILER address into MEMLO, and into $864 / $869. The latter is a DOS patch, perhaps?
 
 _start: lda     #<TRAILER
-        sta     $2E7
+        sta     MEMLO
         sta     $864
         lda     #>TRAILER
-        sta     $2E8
+        sta     MEMLO+1
         sta     $869
         lda     #0                               ; Reset WARMST to zero.
-        sta     $08
+        sta     WARMST
         rts
 
 ; ----------------------------------------------------------------------------
 
-        ; List of the 468 pronunciation rules.
+        ; Three macros used to define the pronunciation rules below.
 
-        .macro pronunciation_entry Arg
+        .macro pronunciation_list_entry Arg
         ; Each entry is a string with the last character's most siginificant bit set to one.
         .repeat .strlen(Arg) - 1, k
         .byte .strat(Arg, k)
@@ -801,20 +822,24 @@ _start: lda     #<TRAILER
 
         .macro pronunciation_index Arg
         ; Each set of letter-specific prononciation rules is preceded by an entry containing "]" followed by the letter.
-        pronunciation_entry .concat("]", Arg)
+        pronunciation_list_entry .concat("]", Arg)
         .endmacro
 
         .macro pronunciation_rule Arg1, Arg2
         ; A rule is a pattern, followd by an "=" sign, followed by the replacement.
-        pronunciation_entry .concat(Arg1, "=", Arg2)
+        pronunciation_list_entry .concat(Arg1, "=", Arg2)
         .endmacro
+
+; ----------------------------------------------------------------------------
+
+        ; List of the 468 pronunciation rules.
 
 PTAB_MISC:
 
         pronunciation_rule     "(A)"        , ""
         pronunciation_rule     "(!)"        , "."
-        .byte                  "(",'"',") =-AH5NKWOWT",'-'+$80   ; ca65 strings cannot contain a double quote (0x22) character, so write out this pronunciation rule as bytes.
-        .byte                  "(",'"',")=KWOW4T",'-'+$80        ; ca65 strings cannot contain a double quote (0x22) character, so write out this pronunciation rule as bytes.
+        pronunciation_rule     "(\") "      , "-AH5NKWOWT-"
+        pronunciation_rule     "(\")"       , "KWOW4T-"
         pronunciation_rule     "(#)"        , " NAH4MBER"
         pronunciation_rule     "($)"        , " DAA4LER"
         pronunciation_rule     "(%)"        , " PERSEH4NT"
@@ -1306,19 +1331,26 @@ PTAB_Z: pronunciation_index    "Z"
         pronunciation_rule     " (Z) "      , "ZIY4"
         pronunciation_rule     "(Z)"        , "Z"
 
+; ----------------------------------------------------------------------------
 
 TRAILER: .byte   $EA,$A0                         ; Trailing bytes -- probably not important. MEMLO is set to TRAILER on start.
 
+; ----------------------------------------------------------------------------
+
         .segment "RECITER_BLOCK2_HEADER"
 
-	; This is the Atari executable header for the second block in the executable file, which is a small
-	; block that sets the ""RUNAD" pointer used by DOS as the run address for executable files.
+        ; This is the Atari executable header for the second block in the executable file, which is a small
+        ; block that sets the ""RUNAD" pointer used by DOS as the run address for executable files.
 
         .word   __RECITER_BLOCK2_LOAD__
         .word   __RECITER_BLOCK2_LOAD__ + __RECITER_BLOCK2_SIZE__ - 1
+
+; ----------------------------------------------------------------------------
 
         .segment "RECITER_BLOCK2"
 
         ; The content of the second block is just the run address of the code (0x4b23).
 
         .word _start
+
+; ----------------------------------------------------------------------------
