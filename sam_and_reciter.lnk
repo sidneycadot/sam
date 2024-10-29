@@ -6,12 +6,15 @@ MEMORY
     SAM_BLOCK2_HEADER: start = $0200, size =    4, file = "sam.xex";
     SAM_BLOCK2       : start = $24de, size =   34, file = "sam.xex";
     SAM_BLOCK3_HEADER: start = $0200, size =    4, file = "sam.xex";
-    SAM_BLOCK3       : start = $02e0, size =    2, file = "sam.xex";
+    SAM_BLOCK3       : start = RUNAD, size =    2, file = "sam.xex";
+}
 
-    RECITER_BLOCK1_HEADER: start = $0200, size =    6, file = "reciter.xex";
-    RECITER_BLOCK1       : start = $4590, size = 5934, file = "reciter.xex";
-    RECITER_BLOCK2_HEADER: start = $0200, size =    4, file = "reciter.xex";
-    RECITER_BLOCK2       : start = $02e2, size =    2, file = "reciter.xex";
+MEMORY
+{
+    RECITER_BLOCK1_HEADER: start = $0200 , size =    6, file = "reciter.xex";
+    RECITER_BLOCK1       : start = $4590 , size = 5934, file = "reciter.xex";
+    RECITER_BLOCK2_HEADER: start = $0200 , size =    4, file = "reciter.xex";
+    RECITER_BLOCK2       : start = INITAD, size =    2, file = "reciter.xex";
 }
 
 SEGMENTS
@@ -22,7 +25,10 @@ SEGMENTS
     SAM_BLOCK2       : load = SAM_BLOCK2       , type = ro, define=yes;
     SAM_BLOCK3_HEADER: load = SAM_BLOCK3_HEADER, type = ro;
     SAM_BLOCK3       : load = SAM_BLOCK3       , type = ro, define=yes;
+}
 
+SEGMENTS
+{
     RECITER_BLOCK1_HEADER: load = RECITER_BLOCK1_HEADER, type = ro;
     RECITER_BLOCK1       : load = RECITER_BLOCK1       , type = ro, define=yes;
     RECITER_BLOCK2_HEADER: load = RECITER_BLOCK2_HEADER, type = ro;
@@ -30,19 +36,6 @@ SEGMENTS
 }
 
 SYMBOLS {
-    WARMST : addrsize=zp  , type=export, value=$08;      # WARMSTART flag.
-    POKMSK : addrsize=zp  , type=export, value=$10;      # IRQEN shadow register.
-    RTCLOK : addrsize=zp  , type=export, value=$12;      # VBLANK clock (50/60 Hz).
-    VNTP   : addrsize=zp  , type=export, value=$82;      # BASIC variable name table.
-    VNTD   : addrsize=zp  , type=export, value=$84;      # BASIC variable name table end.
-    VVTP   : addrsize=zp  , type=export, value=$86;      # BASIC variable value table.
-    STARP  : addrsize=zp  , type=export, value=$8C;      # BASIC string and array table.
-    RUNAD  : addrsize=abs , type=export, value=$02e0;    # DOS run address.
-    INITAD : addrsize=abs , type=export, value=$02e2;    # DOS initialization address.
-    MEMLO  : addrsize=abs , type=export, value=$02e7;    # OS memory-low pointer.
-    BASIC  : addrsize=abs , type=export, value=$a000;    # BASIC entry point.
-    AUDC1  : addrsize=abs , type=export, value=$d201;    # POKEY: Audio Channel #1 control
-    IRQEN  : addrsize=abs , type=export, value=$d20e;    # POKEY: IRQ enabled mask.
-    DMACTL : addrsize=abs , type=export, value=$d400;    # ANTIC: DMA enabled mask.
-    NMIEN  : addrsize=abs , type=export, value=$d40e;    # ANTIC: NMI enabled mask.
+    RUNAD  : type=import;
+    INITAD : type=import;
 }
