@@ -162,18 +162,22 @@ RECITER_VIA_SAM_FROM_BASIC:
 RECITER_VIA_SAM_FROM_MACHINE_CODE:
 
         ; Reciter when entered from machine code.
-        ; When entering, the string to be translated should be in the SAM_BUFFER.
+        ; When entering, the English-language string to be translated should be in the SAM_BUFFER.
 
         jsr     SAM_SAVE_ZP_ADDRESSES           ; Save ZP registers.
 
         ; Copy content of SAM buffer to RECITER buffer, with some character remapping.
-
-        ; The translation performed maps the 32 highest ASCII characters (which include the lowercase letters)
-        ; down by 32.
+        ; The translation performed first zeroes then most significant bit of each character,
+        ; to ensure it is an ASCII character.
         ;
-        ; Consequences:
+        ; Then, it maps the 32 highest ASCII characters (0x60..0x7f, which include the
+        ; lowercase letters) to 0x40..0x5F.
         ;
-        ; `   (backtick)            maps to @ sign.
+        ; To summarize the effects:
+        ;
+        ; The end-of-line character 0x9b map to 0x1b (the escape character).
+        ;
+        ; `   (backtick)            maps to '@'.
         ; a-z (lowercase letters)   map  to A-Z.
         ; {   (curly bracket open)  maps to '[' (angle bracket open).
         ; |   (pipe)                maps to '\' (backslash).
@@ -183,7 +187,7 @@ RECITER_VIA_SAM_FROM_MACHINE_CODE:
         ;
         ; What remains are 96 characters that need to be handled:
         ;
-        ; * 32 ASCII control characters 0x00 .. 0x1f
+        ; * 32 ASCII control characters 0x00 .. 0x1f, including escape (0x1f) that is used as an end-of-string marker.
         ; * 16 characters ' ' (space), '!', '"', '#', '$', '%', '&', single-quote, '(', ')', '*', '+', ',', '-', '.', '/'
         ; * 10 characters '0' .. '9'.
         ; *  7 characters ':', ';', '<', '=', '>', '?', '@'
@@ -192,11 +196,11 @@ RECITER_VIA_SAM_FROM_MACHINE_CODE:
 
         lda     #' '                            ; Put a space character at the start of the RECITER buffer.
         sta     RECITER_BUFFER                  ;
-        ldx     #1                              ; Prepare character copy loop.
+        ldx     #1                              ; Prepare the character copy loop.
         ldy     #0                              ;
-@loop:  lda     SAM_BUFFER,y                    ; Start of character copy loop; load character.
 
-        and     #$7F                            ; Set most significant bit of character to zero. (This translates end-of-message, $9B, into $1B).
+@loop:  lda     SAM_BUFFER,y                    ; Start of character copy loop; load character.
+        and     #$7F                            ; Set bit 7 of the character to zero. Note that this turns end-of-line, 0x9b, into 0x1b.
         cmp     #$70                            ;
         bcc     @1                              ;
         and     #$5F                            ; Characters $70..$7F: zero bit #5.
@@ -204,18 +208,17 @@ RECITER_VIA_SAM_FROM_MACHINE_CODE:
 @1:     cmp     #$60                            ;
         bcc     @2                              ;
         and     #$4F                            ; Characters $60..$6F: zero bits #4 and #5.
-
 @2:     sta     RECITER_BUFFER,x                ; Store sanitized character and proceed to the next one.
         inx                                     ;
         iny                                     ;
         cpy     #$FF                            ;
         bne     @loop                           ; End of character copy loop.
 
-        ldx     #$FF                            ;
-        lda     #$1B                            ; Store escape character at the end of the RECITER buffer.
+        ldx     #$FF                            ; Store $1B at the end of the RECITER buffer.
+        lda     #$1B                            ; This ensures the RECITER buffer's string will end in $1B.
         sta     RECITER_BUFFER,x                ;
 
-        jsr     SUB_ENGLISH_TO_PHONEMES         ; Translate to phonemes, then say those.
+        jsr     SUB_ENGLISH_TO_PHONEMES         ; Translate buffer to phonemes, then say those.
 
 ; ----------------------------------------------------------------------------
 
@@ -245,44 +248,51 @@ TRANSLATE_NEXT_CHARACTER:
         inc     ZP_RECITER_BUFFER_INDEX         ;
         ldx     ZP_RECITER_BUFFER_INDEX         ;
         lda     RECITER_BUFFER,x                ; Load English character to translate in ZP_CURRENT_CHARACTER.
-        sta     ZP_CURRENT_CHARACTER            ;
-        cmp     #$1B                            ; Compare to the escape character.
-        bne     @not_eol                        ;
+        sta     ZP_CURRENT_CHARACTER            ; Store for later use.
 
-        inc     ZP_SAM_BUFFER_INDEX             ; Handle escape character ($1B, translated from $9B). It denotes end-of-string.
+        cmp     #$1B                            ; Is the current character the end-of-string character $1B?
+        bne     @not_end_of_string              ;
+                                                ; Handle end-of-string.
+        inc     ZP_SAM_BUFFER_INDEX             ; Append end-of-string character to the SAM phoneme buffer.
         ldx     ZP_SAM_BUFFER_INDEX             ;
-        lda     #$9B                            ; Store end-of-line character in the SAM buffer,
+        lda     #$9B                            ;
         sta     SAM_BUFFER,x                    ; then return. We're done.
-        rts                                     ;
+        rts                                     ; (The final chunk will be passed to SAM by the caller).
 
-@not_eol:
+@not_end_of_string:
 
-        cmp     #'.'                            ;
-        bne     @skip1                          ;
+	; The following sequence of 13 instructions implements the rule that a period character that is not
+	; followed by a digit is copied into the SAM phoneme buffer verbatim; it is an "end-of-sentence"
+	; indicator.
+        ;
+        ; Periods that precede a digit are assumed to be part of a number, and those will be rendered as "POYNT"
+        ; by a miscellaneous pronunciation rule later.
 
-        ; Handle period character.
-
-        inx                                     ; Is the character following the period a digit?
+        cmp     #'.'                            ; Compare current character to period ('.').
+        bne     @proceed_1                      ;
+        inx                                     ; Is the period following the period a digit (0-9)?
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
         lda     CHARACTER_PROPERTY,y            ;
-        and     #$01                            ; Bit #0 tests if the next character is a digit.
-        bne     @skip1                          ; If yes, skip to @skip1.
+        and     #$01                            ;
+        bne     @proceed_1                      ; Yes, skip to @proceed_1.
 
-        inc     ZP_SAM_BUFFER_INDEX             ; Period followed by a digit: emit the period character.
+                                                ; Handle end-of-sentence period.
+
+        inc     ZP_SAM_BUFFER_INDEX             ; Append the period character to the SAM phoneme byffer.
         ldx     ZP_SAM_BUFFER_INDEX             ;
-        lda     #'.'                            ; Store '.' character to SAM buffer, then
-        sta     SAM_BUFFER,x                    ; proceed to the next RECITER_BUFFER character.
-        jmp     TRANSLATE_NEXT_CHARACTER        ;
+        lda     #'.'                            ;
+        sta     SAM_BUFFER,x                    ;
+        jmp     TRANSLATE_NEXT_CHARACTER        ; Proceed to the next English character.
 
-@skip1:                                         ; We get here if the current character is not a period, or it a period followed by a digit.
+@proceed_1:                                     ; The current character is not a period, or it is a period followed by a digit.
 
-        lda     ZP_CURRENT_CHARACTER            ;
+        lda     ZP_CURRENT_CHARACTER            ; Check if the character is in the "miscellaneous symbols including digits" class.
         tay                                     ;
         lda     CHARACTER_PROPERTY,y            ;
         sta     ZP_CURRENT_CHARACTER_PROPS      ;
-        and     #$02                            ; Check if the character is in the "miscellaneous symbols including digits" class.
-        beq     @3                              ; No, proceed.
+        and     #$02                            ;
+        beq     @proceed_2                      ; No: proceed.
 
         lda     #<PTAB_MISC                     ; Try to match miscellaneous pronunciation rules.
         sta     $FB                             ;
@@ -290,19 +300,22 @@ TRANSLATE_NEXT_CHARACTER:
         sta     $FC                             ;
         jmp     MATCH_RULE                      ;
 
-@3:     lda     ZP_CURRENT_CHARACTER_PROPS      ; Check if the character is is a "space-like" (i.e., properties is zero).
-        bne     TRANSLATE_ALPHABETIC_CHARACTER  ; Nope. Proceed to match an alphabetic character.
+@proceed_2:
 
-        lda     #' '                            ; Replace the character by a space character.
+        lda     ZP_CURRENT_CHARACTER_PROPS      ; Check if the character is "space-like" (i.e., it properties flags are all zero).
+        bne     TRANSLATE_ALPHABETIC_CHARACTER  ; If not, proceed to match an alphabetic character.
+
+        lda     #' '                            ; Replace the character in the source (english) buffer by a space.
         sta     RECITER_BUFFER,x                ;
-        inc     ZP_SAM_BUFFER_INDEX             ;
 
-        ldx     ZP_SAM_BUFFER_INDEX             ; Is the destination buffer ~ half full?
-        cpx     #$78                            ; We're rendering a space -- this is a good time to flush the buffer!
+        inc     ZP_SAM_BUFFER_INDEX             ; Increment the SAM phoneme buffer index.
+        ldx     ZP_SAM_BUFFER_INDEX             ;
+                                                ; We're rendering a space; this would be a good time to flush the buffer.
+        cpx     #$78                            ; Is the SAM phoneme buffer approximately half full?
         bcs     FLUSH_SAM_BUFFER                ; Yes! Flush (say) the current phoneme buffer.
 
-        sta     SAM_BUFFER,x                    ;
-        jmp     TRANSLATE_NEXT_CHARACTER        ;
+        sta     SAM_BUFFER,x                    ; Store a space character to the SAM phoneme buffer.
+        jmp     TRANSLATE_NEXT_CHARACTER        ; Proceed with next character.
 
 ; ----------------------------------------------------------------------------
 
