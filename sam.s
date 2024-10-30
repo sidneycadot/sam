@@ -206,7 +206,8 @@ SAM_SAY_PHONEMES:                               ; Note: entry point for the reci
 
 SAM_COPY_BASIC_SAM_STRING:
 
-        ; This subroutine searches the BASIC variable SAM$.
+        ; This subroutine searches the BASIC string variable named "SAM$".
+        ; Note that the code matches any BASIC string the name of which ends with "SAM$", which is probably not intentional.
         ;
         ; If found, it copies its contents to SAM_BUFFER.
         ; If not found, we return to BASIC.
