@@ -52,10 +52,18 @@
 
 ; ----------------------------------------------------------------------------
 
-        ZP_SAM_BUFFER_INDEX        := $F5  ; Destination index in the SAM_BUFFER.
-        ZP_CURRENT_CHARACTER_PROPS := $F6  ; Current character to be translated.
-        ZP_RECITER_BUFFER_INDEX    := $FA  ; Source index in the RECITER_BUFFER.
-        ZP_CURRENT_CHARACTER       := $FD  ; Current character to be translated.
+        ZP_SAM_BUFFER_INDEX     := $F5  ; Destination index in the SAM_BUFFER.
+        ZP_TEMP1                := $F6  ; Current character to be translated.
+        ZP_TEMP2                := $F7  ;
+        ZP_TEMP3                := $F8  ;
+        ZP_TEMP4                := $F9  ;
+        ZP_RECITER_BUFFER_INDEX := $FA  ; Source index in the RECITER_BUFFER.
+        ZP_RULE_PTR             := $FB  ; rule pointer
+        ZP_RULE_PTR_LO          := $FB  ; rule pointer, LSB
+        ZP_RULE_PTR_HI          := $FC  ; rule pointer, MSB
+        ZP_CURRENT_CHARACTER    := $FD  ; Current character to be translated.
+        ZP_TEMP5                := $FE  ;
+        ZP_TEMP6                := $FF  ;
 
 ; ----------------------------------------------------------------------------
 
@@ -90,7 +98,7 @@ CHARACTER_PROPERTY:
         .byte   %00000010                       ; $
         .byte   %00000010                       ; %
         .byte   %00000010                       ; &
-        .byte   %10000010                       ; '     -- Note that the single quote has bit 7 set, like the letters A-Z. Mistake?
+        .byte   %10000010                       ; '     -- The single quote has bit 7 set, like A-Z. For possessive (e.g. my brother's keeper) I think.
         .byte   %00000000                       ; (     -- ignore.
         .byte   %00000000                       ; )     -- ignore.
         .byte   %00000010                       ; *
@@ -251,7 +259,7 @@ TRANSLATE_NEXT_CHARACTER:
         sta     ZP_CURRENT_CHARACTER            ; Store for later use.
 
         cmp     #$1B                            ; Is the current character the end-of-string character $1B?
-        bne     @not_end_of_string              ;
+        bne     @proceed_1                      ; Nope, proceed.
                                                 ; Handle end-of-string.
         inc     ZP_SAM_BUFFER_INDEX             ; Append end-of-string character to the SAM phoneme buffer.
         ldx     ZP_SAM_BUFFER_INDEX             ;
@@ -259,23 +267,23 @@ TRANSLATE_NEXT_CHARACTER:
         sta     SAM_BUFFER,x                    ; then return. We're done.
         rts                                     ; (The final chunk will be passed to SAM by the caller).
 
-@not_end_of_string:
+@proceed_1:
 
-	; The following sequence of 13 instructions implements the rule that a period character that is not
-	; followed by a digit is copied into the SAM phoneme buffer verbatim; it is an "end-of-sentence"
-	; indicator.
+        ; The following sequence of 13 instructions implements the rule that a period character that is not
+        ; followed by a digit is copied into the SAM phoneme buffer verbatim; it is an "end-of-sentence"
+        ; indicator.
         ;
         ; Periods that precede a digit are assumed to be part of a number, and those will be rendered as "POYNT"
         ; by a miscellaneous pronunciation rule later.
 
         cmp     #'.'                            ; Compare current character to period ('.').
-        bne     @proceed_1                      ;
+        bne     @proceed_2                      ;
         inx                                     ; Is the period following the period a digit (0-9)?
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
         lda     CHARACTER_PROPERTY,y            ;
         and     #$01                            ;
-        bne     @proceed_1                      ; Yes, skip to @proceed_1.
+        bne     @proceed_2                      ; Yes, skip to @proceed_2.
 
                                                 ; Handle end-of-sentence period.
 
@@ -285,24 +293,24 @@ TRANSLATE_NEXT_CHARACTER:
         sta     SAM_BUFFER,x                    ;
         jmp     TRANSLATE_NEXT_CHARACTER        ; Proceed to the next English character.
 
-@proceed_1:                                     ; The current character is not a period, or it is a period followed by a digit.
+@proceed_2:                                     ; The current character is not a period, or it is a period followed by a digit.
 
         lda     ZP_CURRENT_CHARACTER            ; Check if the character is in the "miscellaneous symbols including digits" class.
         tay                                     ;
         lda     CHARACTER_PROPERTY,y            ;
-        sta     ZP_CURRENT_CHARACTER_PROPS      ;
+        sta     ZP_TEMP1                        ;
         and     #$02                            ;
-        beq     @proceed_2                      ; No: proceed.
+        beq     @proceed_3                      ; No: proceed.
 
         lda     #<PTAB_MISC                     ; Try to match miscellaneous pronunciation rules.
-        sta     $FB                             ;
+        sta     ZP_RULE_PTR_LO                  ;
         lda     #>PTAB_MISC                     ;
-        sta     $FC                             ;
+        sta     ZP_RULE_PTR_HI                  ;
         jmp     MATCH_RULE                      ;
 
-@proceed_2:
+@proceed_3:
 
-        lda     ZP_CURRENT_CHARACTER_PROPS      ; Check if the character is "space-like" (i.e., it properties flags are all zero).
+        lda     ZP_TEMP1                        ; Check if the character is "space-like" (i.e., it properties flags are all zero).
         bne     TRANSLATE_ALPHABETIC_CHARACTER  ; If not, proceed to match an alphabetic character.
 
         lda     #' '                            ; Replace the character in the source (english) buffer by a space.
@@ -337,89 +345,94 @@ FLUSH_SAM_BUFFER:
 
 TRANSLATE_ALPHABETIC_CHARACTER:
 
-        lda     ZP_CURRENT_CHARACTER_PROPS      ; Verify that $F6 contains a value with its most significant bit set.
+        lda     ZP_TEMP1                        ; Verify that ZP_TEMP1 contains a value with its most significant bit set.
         and     #$80                            ;
         bne     @good                           ; Character is alphabetic, or a single quote.
         brk                                     ; Abort. Unexpected character type.
 
 @good:  lda     ZP_CURRENT_CHARACTER            ; Load the character to be processed from ZP_CURRENT_CHARACTER.
-        sec                                     ; Set ($FB, $FC) pointer to the table entry corresponding to the letter.
+        sec                                     ; Set ZP_RULE_PTR to the table entry corresponding to the letter.
         sbc     #'A'                            ;
         tax                                     ;
         lda     PTAB_INDEX_LO,x                 ;
-        sta     $FB                             ;
+        sta     ZP_RULE_PTR_LO                  ;
         lda     PTAB_INDEX_HI,x                 ;
-        sta     $FC                             ;
+        sta     ZP_RULE_PTR_HI                  ;
 
 MATCH_RULE:
 
-        ; ($FB, $FC) are pointing to a rule or rule index.
+        ; ZP_RULE_PTR is pointing to a rule or rule index.
 
-        ldy     #0                              ; Set Y=0 for accessing ($FB, $FC) later on.
+        ldy     #0                              ; Set Y=0 for accessing ZP_RULE_PTR later on.
 
         ; Find end-of-rule.
 
-@1:     clc                                     ; Increment the ($FB, $FC) pointer by one.
-        lda     $FB                             ;
+@1:     clc                                     ; Increment ZP_RULE_PTR by one.
+        lda     ZP_RULE_PTR_LO                  ;
         adc     #<1                             ;
-        sta     $FB                             ;
-        lda     $FC                             ;
+        sta     ZP_RULE_PTR_LO                  ;
+        lda     ZP_RULE_PTR_HI                  ;
         adc     #>1                             ;
-        sta     $FC                             ;
+        sta     ZP_RULE_PTR_HI                  ;
 
-        lda     ($FB),y                         ; Load byte at address pointed to by ($FB, $FC).
+        lda     (ZP_RULE_PTR),y                 ; Load byte at address pointed to by ZP_RULE_PTR.
         bpl     @1                              ; Repeat increment until we find a value with its most significant bit set.
 
         iny                                     ;
-@2:     lda     ($FB),y                         ; Find parenthesis-open character.
-        cmp     #'('                            ; Is $(FB),Y a parenthesis-open character?
+@2:     lda     (ZP_RULE_PTR),y                 ; Find parenthesis-open character.
+        cmp     #'('                            ; Is (ZP_RULE_PTR),Y a parenthesis-open character?
         beq     L47F8                           ; Yes -- goto L47F8.
         iny                                     ; No -- increment Y, then retry.
         jmp     @2
 
 ; ----------------------------------------------------------------------------
 
-        ; ($FB, $FC) is at the opening parenthesis of a rule definition.
+        ; ZP_RULE_PTR now points to the opening parenthesis of a rule definition.
 
-L47F8:  sty     $FF                             ;
-@1:     iny                                     ;
-        lda     ($FB),y                         ;
+L47F8:  sty     ZP_TEMP6                        ; ZP_TEMP6 = Y offset for open-paren.
+
+@1:     iny                                     ; Scan the rule definition for the corresponding closing parenthesis.
+        lda     (ZP_RULE_PTR),y                 ;
         cmp     #')'                            ;
         bne     @1                              ;
-        sty     $FE                             ;
-@2:     iny                                     ;
-        lda     ($FB),y                         ;
-        and     #$7F                            ;
+
+        sty     ZP_TEMP5                        ; ZP_TEMP5 = offset for open-paren.
+
+@2:     iny                                     ; Scan the rule definition for the corresponding '=' character.
+        lda     (ZP_RULE_PTR),y                 ;
+        and     #$7F                            ; The equality character may be the last character.
         cmp     #'='                            ;
         bne     @2                              ;
+
         sty     ZP_CURRENT_CHARACTER            ;
+
         ldx     ZP_RECITER_BUFFER_INDEX         ;
-        stx     $F9                             ;
-        ldy     $FF                             ;
+        stx     ZP_TEMP4                        ;
+        ldy     ZP_TEMP6                        ;
         iny                                     ;
 @3:     lda     RECITER_BUFFER,x                ;
-        sta     ZP_CURRENT_CHARACTER_PROPS      ;
-        lda     ($FB),y                         ;
-        cmp     ZP_CURRENT_CHARACTER_PROPS      ;
+        sta     ZP_TEMP1                        ;
+        lda     (ZP_RULE_PTR),y                 ;
+        cmp     ZP_TEMP1                        ;
         beq     @4                              ;
         jmp     MATCH_RULE                      ;
 
 @4:     iny                                     ;
-        cpy     $FE                             ;
+        cpy     ZP_TEMP5                        ;
         bne     @5                              ;
         jmp     @6                              ;
 
 @5:     inx                                     ;
-        stx     $F9                             ;
+        stx     ZP_TEMP4                        ;
         jmp     @3                              ;
 
 @6:     lda     ZP_RECITER_BUFFER_INDEX         ;
-        sta     $F8                             ;
-L4835:  ldy     $FF                             ;
+        sta     ZP_TEMP3                        ;
+L4835:  ldy     ZP_TEMP6                        ;
         dey                                     ;
-        sty     $FF                             ;
-        lda     ($FB),y                         ;
-        sta     ZP_CURRENT_CHARACTER_PROPS      ;
+        sty     ZP_TEMP6                        ;
+        lda     (ZP_RULE_PTR),y                 ;
+        sta     ZP_TEMP1                        ;
         bpl     L4843                           ;
         jmp     L49BA                           ;
 
@@ -430,21 +443,21 @@ L4843:  and     #$7F                            ;
         lda     CHARACTER_PROPERTY,x            ;
         and     #$80                            ;
         beq     SW1_485F                        ;
-        ldx     $F8                             ;
+        ldx     ZP_TEMP3                        ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
-        cmp     ZP_CURRENT_CHARACTER_PROPS      ;
+        cmp     ZP_TEMP1                        ;
         beq     @1                              ;
         jmp     MATCH_RULE                      ;
 
-@1:     stx     $F8                             ;
+@1:     stx     ZP_TEMP3                        ;
         jmp     L4835                           ;
 
 ; ----------------------------------------------------------------------------
 
 SW1_485F:
 
-        lda     ZP_CURRENT_CHARACTER_PROPS      ; Switch on content of $F6.
+        lda     ZP_TEMP1                        ; Switch on content of ZP_TEMP1.
         cmp     #' '                            ; Handle ' ' character.
         bne     @1                              ;
         jmp     SW1_SPACE                       ;
@@ -483,7 +496,7 @@ SW1_SPACE:
 
 ; ----------------------------------------------------------------------------
 
-L48A7:  stx     $F8                             ;
+L48A7:  stx     ZP_TEMP3                        ;
         jmp     L4835                           ;
 
 ; ----------------------------------------------------------------------------
@@ -506,7 +519,7 @@ SW1_PERIOD:
 
 ; ----------------------------------------------------------------------------
 
-L48C0:  stx     $F8                             ;
+L48C0:  stx     ZP_TEMP3                        ;
         jmp     L4835                           ;
 
 ; ----------------------------------------------------------------------------
@@ -549,7 +562,7 @@ SW1_AT_SIGN:
         beq     @2                              ;
         jmp     MATCH_RULE                      ;
 
-@2:     stx     $F8                             ;
+@2:     stx     ZP_TEMP3                        ;
         jmp     L4835                           ;
 
 ; ----------------------------------------------------------------------------
@@ -563,14 +576,14 @@ SW1_CARET:
 
 ; ----------------------------------------------------------------------------
 
-L4914:  stx     $F8                             ;
+L4914:  stx     ZP_TEMP3                        ;
         jmp     L4835                           ;
 
 ; ----------------------------------------------------------------------------
 
 SW1_PLUS:
 
-        ldx     $F8                             ;
+        ldx     ZP_TEMP3                        ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'E'                            ;
@@ -590,14 +603,14 @@ SW1_COLON:
         bne     @1                              ; consonant.
         jmp     L4835                           ; non-consonant.
 
-@1:     stx     $F8                             ;
+@1:     stx     ZP_TEMP3                        ;
         jmp     SW1_COLON                       ;
 
 ; ----------------------------------------------------------------------------
 
 SUB_GET_CHAR_PROPERTY_F8_PREV:
 
-        ldx     $F8                             ;
+        ldx     ZP_TEMP3                        ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
@@ -608,7 +621,7 @@ SUB_GET_CHAR_PROPERTY_F8_PREV:
 
 SUB_GET_CHAR_PROPERTY_F7_NEXT:
 
-        ldx     $F7                             ;
+        ldx     ZP_TEMP2                        ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
@@ -619,7 +632,7 @@ SUB_GET_CHAR_PROPERTY_F7_NEXT:
 
 SW2_PERCENT:
 
-        ldx     $F7                             ;
+        ldx     ZP_TEMP2                        ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'E'                            ;
@@ -636,7 +649,7 @@ SW2_PERCENT:
         cmp     #'R'                            ;
         bne     L4977                           ;
 
-L4972:  stx     $F7                             ;
+L4972:  stx     ZP_TEMP2                        ;
         jmp     L49BE                           ;
 
 ; ----------------------------------------------------------------------------
@@ -677,38 +690,39 @@ L49B7:  jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
-L49BA:  lda     $F9                             ;
-        sta     $F7                             ;
-L49BE:  ldy     $FE                             ;
+L49BA:  lda     ZP_TEMP4                        ;
+        sta     ZP_TEMP2                        ;
+
+; ----------------------------------------------------------------------------
+
+L49BE:  ldy     ZP_TEMP5                        ;
         iny                                     ;
         cpy     ZP_CURRENT_CHARACTER            ;
         bne     @1                              ;
-        jmp     L4ACD                           ;
+        jmp     APPLY_RULE                      ;
 
-@1:     sty     $FE                             ;
-        lda     ($FB),y                         ;
-        sta     ZP_CURRENT_CHARACTER_PROPS      ;
+@1:     sty     ZP_TEMP5                        ;
+        lda     (ZP_RULE_PTR),y                 ;
+        sta     ZP_TEMP1                        ;
         tax                                     ;
         lda     CHARACTER_PROPERTY,x            ;
         and     #$80                            ;
         beq     SW2_49E8                        ;
-        ldx     $F7                             ;
+        ldx     ZP_TEMP2                        ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
-        cmp     ZP_CURRENT_CHARACTER_PROPS      ;
-        beq     L49E3                           ;
+        cmp     ZP_TEMP1                        ;
+        beq     @2                              ;
         jmp     MATCH_RULE                      ;
 
-; ----------------------------------------------------------------------------
-
-L49E3:  stx     $F7                             ;
+@2:     stx     ZP_TEMP2                        ;
         jmp     L49BE                           ;
 
 ; ----------------------------------------------------------------------------
 
 SW2_49E8:
 
-        lda     ZP_CURRENT_CHARACTER_PROPS      ; Switch on content of $F6.
+        lda     ZP_TEMP1                        ; Switch on content of ZP_TEMP1.
         cmp     #' '                            ; Handle ' ' character.
         bne     @1                              ;
         jmp     SW2_SPACE                       ;
@@ -750,7 +764,7 @@ SW2_SPACE:
 
 ; ----------------------------------------------------------------------------
 
-L4A37:  stx     $F7                             ;
+L4A37:  stx     ZP_TEMP2                        ;
         jmp     L49BE                           ;
 
 ; ----------------------------------------------------------------------------
@@ -773,7 +787,7 @@ SW2_PERIOD:
 
 ; ----------------------------------------------------------------------------
 
-L4A50:  stx     $F7                             ;
+L4A50:  stx     ZP_TEMP2                        ;
         jmp     L49BE                           ;
 
 ; ----------------------------------------------------------------------------
@@ -816,7 +830,7 @@ SW2_AT_SIGN:
         beq     @2                              ;
         jmp     MATCH_RULE                      ;
 
-@2:     stx     $F7                             ;
+@2:     stx     ZP_TEMP2                        ;
         jmp     L49BE                           ;
 
 ; ----------------------------------------------------------------------------
@@ -830,14 +844,14 @@ SW2_CARET:
 
 ; ----------------------------------------------------------------------------
 
-L4AA4:  stx     $F7                             ;
+L4AA4:  stx     ZP_TEMP2                        ;
         jmp     L49BE                           ;
 
 ; ----------------------------------------------------------------------------
 
 SW2_PLUS:
 
-        ldx     $F7                             ;
+        ldx     ZP_TEMP2                        ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'E'                            ;
@@ -857,23 +871,25 @@ SW2_COLON:
         bne     @1                              ; consonant.
         jmp     L49BE                           ; non-consonant.
 
-@1:     stx     $F7                             ;
+@1:     stx     ZP_TEMP2                        ;
         jmp     SW2_COLON                       ;
 
 ; ----------------------------------------------------------------------------
 
-L4ACD:  ldy     ZP_CURRENT_CHARACTER            ;
-        lda     $F9                             ;
+APPLY_RULE:
+
+        ldy     ZP_CURRENT_CHARACTER            ;
+        lda     ZP_TEMP4                        ;
         sta     ZP_RECITER_BUFFER_INDEX         ;
-@1:     lda     ($FB),y                         ;
-        sta     ZP_CURRENT_CHARACTER_PROPS      ;
+@1:     lda     (ZP_RULE_PTR),y                 ;
+        sta     ZP_TEMP1                        ;
         and     #$7F                            ;
         cmp     #'='                            ;
         beq     @2                              ;
         inc     ZP_SAM_BUFFER_INDEX             ;
         ldx     ZP_SAM_BUFFER_INDEX             ;
         sta     SAM_BUFFER,x                    ;
-@2:     bit     ZP_CURRENT_CHARACTER_PROPS      ;
+@2:     bit     ZP_TEMP1                        ;
         bpl     @3                              ;
         jmp     TRANSLATE_NEXT_CHARACTER        ;
 
