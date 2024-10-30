@@ -52,6 +52,13 @@
 
 ; ----------------------------------------------------------------------------
 
+        ZP_SAM_BUFFER_INDEX        := $F5  ; Destination index in the SAM_BUFFER.
+        ZP_CURRENT_CHARACTER_PROPS := $F6  ; Current character to be translated.
+        ZP_RECITER_BUFFER_INDEX    := $FA  ; Source index in the RECITER_BUFFER.
+        ZP_CURRENT_CHARACTER       := $FD  ; Current character to be translated.
+
+; ----------------------------------------------------------------------------
+
 RECITER_BUFFER: .res 256, 0
 
 ; ----------------------------------------------------------------------------
@@ -83,7 +90,7 @@ CHARACTER_PROPERTY:
         .byte   %00000010                       ; $
         .byte   %00000010                       ; %
         .byte   %00000010                       ; &
-        .byte   %10000010                       ; '     -- Note that the single quote has bit 7 set, like the letters A-Z.
+        .byte   %10000010                       ; '     -- Note that the single quote has bit 7 set, like the letters A-Z. Mistake?
         .byte   %00000000                       ; (     -- ignore.
         .byte   %00000000                       ; )     -- ignore.
         .byte   %00000010                       ; *
@@ -189,7 +196,7 @@ RECITER_VIA_SAM_FROM_MACHINE_CODE:
         ldy     #0                              ;
 @loop:  lda     SAM_BUFFER,y                    ; Start of character copy loop; load character.
 
-        and     #$7F                            ; Set most significant bit of character to zero.
+        and     #$7F                            ; Set most significant bit of character to zero. (This translates end-of-message, $9B, into $1B).
         cmp     #$70                            ;
         bcc     @1                              ;
         and     #$5F                            ; Characters $70..$7F: zero bit #5.
@@ -208,11 +215,11 @@ RECITER_VIA_SAM_FROM_MACHINE_CODE:
         lda     #$1B                            ; Store escape character at the end of the RECITER buffer.
         sta     RECITER_BUFFER,x                ;
 
-        jsr     SUB_ENGLISH_TO_PHONEMES         ;
+        jsr     SUB_ENGLISH_TO_PHONEMES         ; Translate to phonemes, then say those.
 
 ; ----------------------------------------------------------------------------
 
-SUB_473E_SAY_PHONEMES:
+SAY_PHONEMES:
 
         jsr     SAM_SAY_PHONEMES                ; Call subroutine in SAM.
         rts                                     ; Done.
@@ -224,83 +231,105 @@ SUB_ENGLISH_TO_PHONEMES:
         ; Translate English text in the RECITER_BUFFER to phonemes in the SAM_BUFFER.
 
         lda     #$FF                            ;
-        sta     $FA                             ;
-L4746:  lda     #$FF                            ;
-        sta     $F5                             ;
+        sta     ZP_RECITER_BUFFER_INDEX         ;
+
+TRANSLATE_NEXT_CHUNK:
+
+        lda     #$FF                            ;
+        sta     ZP_SAM_BUFFER_INDEX             ;
 
 ; ----------------------------------------------------------------------------
 
-L474A:  inc     $FA                             ;
-        ldx     $FA                             ;
-        lda     RECITER_BUFFER,x                ;
-        sta     $FD                             ;
+TRANSLATE_NEXT_CHARACTER:
+
+        inc     ZP_RECITER_BUFFER_INDEX         ;
+        ldx     ZP_RECITER_BUFFER_INDEX         ;
+        lda     RECITER_BUFFER,x                ; Load English character to translate in ZP_CURRENT_CHARACTER.
+        sta     ZP_CURRENT_CHARACTER            ;
         cmp     #$1B                            ; Compare to the escape character.
-        bne     @1                              ;
-        inc     $F5                             ;
-        ldx     $F5                             ;
-        lda     #$9B                            ; Store end-of-line character to SAM buffer.
-        sta     SAM_BUFFER,x                    ;
+        bne     @not_eol                        ;
+
+        inc     ZP_SAM_BUFFER_INDEX             ; Handle escape character ($1B, translated from $9B). It denotes end-of-string.
+        ldx     ZP_SAM_BUFFER_INDEX             ;
+        lda     #$9B                            ; Store end-of-line character in the SAM buffer,
+        sta     SAM_BUFFER,x                    ; then return. We're done.
         rts                                     ;
 
-@1:     cmp     #'.'                            ;
-        bne     @2                              ;
-        inx                                     ;
+@not_eol:
+
+        cmp     #'.'                            ;
+        bne     @skip1                          ;
+
+        ; Handle period character.
+
+        inx                                     ; Is the character following the period a digit?
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
         lda     CHARACTER_PROPERTY,y            ;
-        and     #$01                            ;
-        bne     @2                              ;
-        inc     $F5                             ;
-        ldx     $F5                             ;
-        lda     #'.'                            ; Store period character to SAM buffer.
-        sta     SAM_BUFFER,x                    ;
-        jmp     L474A                           ;
+        and     #$01                            ; Bit #0 tests if the next character is a digit.
+        bne     @skip1                          ; If yes, skip to @skip1.
 
-@2:     lda     $FD                             ;
+        inc     ZP_SAM_BUFFER_INDEX             ; Period followed by a digit: emit the period character.
+        ldx     ZP_SAM_BUFFER_INDEX             ;
+        lda     #'.'                            ; Store '.' character to SAM buffer, then
+        sta     SAM_BUFFER,x                    ; proceed to the next RECITER_BUFFER character.
+        jmp     TRANSLATE_NEXT_CHARACTER        ;
+
+@skip1:                                         ; We get here if the current character is not a period, or it a period followed by a digit.
+
+        lda     ZP_CURRENT_CHARACTER            ;
         tay                                     ;
         lda     CHARACTER_PROPERTY,y            ;
-        sta     $F6                             ;
-        and     #$02                            ;
-        beq     @3                              ;
+        sta     ZP_CURRENT_CHARACTER_PROPS      ;
+        and     #$02                            ; Check if the character is in the "miscellaneous symbols including digits" class.
+        beq     @3                              ; No, proceed.
+
         lda     #<PTAB_MISC                     ; Try to match miscellaneous pronunciation rules.
         sta     $FB                             ;
         lda     #>PTAB_MISC                     ;
         sta     $FC                             ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
-@3:     lda     $F6                             ;
-        bne     L47C3                           ;
-        lda     #' '                            ; Space scharacter.
+@3:     lda     ZP_CURRENT_CHARACTER_PROPS      ; Check if the character is is a "space-like" (i.e., properties is zero).
+        bne     TRANSLATE_ALPHABETIC_CHARACTER  ; Nope. Proceed to match an alphabetic character.
+
+        lda     #' '                            ; Replace the character by a space character.
         sta     RECITER_BUFFER,x                ;
-        inc     $F5                             ;
-        ldx     $F5                             ;
-        cpx     #$78                            ;
-        bcs     L47AC                           ;
+        inc     ZP_SAM_BUFFER_INDEX             ;
+
+        ldx     ZP_SAM_BUFFER_INDEX             ; Is the destination buffer ~ half full?
+        cpx     #$78                            ; We're rendering a space -- this is a good time to flush the buffer!
+        bcs     FLUSH_SAM_BUFFER                ; Yes! Flush (say) the current phoneme buffer.
+
         sta     SAM_BUFFER,x                    ;
-        jmp     L474A                           ;
+        jmp     TRANSLATE_NEXT_CHARACTER        ;
 
 ; ----------------------------------------------------------------------------
 
-SAVE_FA: .byte 0                                ; Temporary storage for $FA.
+SAVE_FA: .byte 0                                ; Temporary storage for ZP_RECITER_BUFFER_INDEX.
 
-L47AC:  lda     #$9B                            ;
+FLUSH_SAM_BUFFER:
+
+        lda     #$9B                            ; Add an end-of-line to the rendered buffer.
         sta     SAM_BUFFER,x                    ;
-        lda     $FA                             ;
+        lda     ZP_RECITER_BUFFER_INDEX         ; Save reciter buffer index.
         sta     SAVE_FA                         ;
-        sta     $CD                             ;
-        jsr     SUB_473E_SAY_PHONEMES           ;
-        lda     SAVE_FA                         ;
-        sta     $FA                             ;
-        jmp     L4746                           ;
+        sta     $CD                             ; ??? Is this important? (Maybe for SAM?)
+        jsr     SAY_PHONEMES                    ; Speak the current phonemes in the SAM_BUFFER.
+        lda     SAVE_FA                         ; Restore the reciter buffer index.
+        sta     ZP_RECITER_BUFFER_INDEX         ;
+        jmp     TRANSLATE_NEXT_CHUNK            ; Render the next chunk.
 
 ; ----------------------------------------------------------------------------
 
-L47C3:  lda     $F6                             ; Verify that $F6 contains a value with its most significant bit set.
-        and     #$80                            ;
-        bne     @1                              ;
-        brk                                     ; Abort.
+TRANSLATE_ALPHABETIC_CHARACTER:
 
-@1:     lda     $FD                             ; Load the character to be processed from $FD.
+        lda     ZP_CURRENT_CHARACTER_PROPS      ; Verify that $F6 contains a value with its most significant bit set.
+        and     #$80                            ;
+        bne     @good                           ; Character is alphabetic, or a single quote.
+        brk                                     ; Abort. Unexpected character type.
+
+@good:  lda     ZP_CURRENT_CHARACTER            ; Load the character to be processed from ZP_CURRENT_CHARACTER.
         sec                                     ; Set ($FB, $FC) pointer to the table entry corresponding to the letter.
         sbc     #'A'                            ;
         tax                                     ;
@@ -309,11 +338,13 @@ L47C3:  lda     $F6                             ; Verify that $F6 contains a val
         lda     PTAB_INDEX_HI,x                 ;
         sta     $FC                             ;
 
-        ; Pattern matching loop.
+MATCH_RULE:
 
-MATCH_NEXT:
+        ; ($FB, $FC) are pointing to a rule or rule index.
 
         ldy     #0                              ; Set Y=0 for accessing ($FB, $FC) later on.
+
+        ; Find end-of-rule.
 
 @1:     clc                                     ; Increment the ($FB, $FC) pointer by one.
         lda     $FB                             ;
@@ -322,6 +353,7 @@ MATCH_NEXT:
         lda     $FC                             ;
         adc     #>1                             ;
         sta     $FC                             ;
+
         lda     ($FB),y                         ; Load byte at address pointed to by ($FB, $FC).
         bpl     @1                              ; Repeat increment until we find a value with its most significant bit set.
 
@@ -334,7 +366,7 @@ MATCH_NEXT:
 
 ; ----------------------------------------------------------------------------
 
-        ; A parenthesis-open was found.
+        ; ($FB, $FC) is at the opening parenthesis of a rule definition.
 
 L47F8:  sty     $FF                             ;
 @1:     iny                                     ;
@@ -347,17 +379,17 @@ L47F8:  sty     $FF                             ;
         and     #$7F                            ;
         cmp     #'='                            ;
         bne     @2                              ;
-        sty     $FD                             ;
-        ldx     $FA                             ;
+        sty     ZP_CURRENT_CHARACTER            ;
+        ldx     ZP_RECITER_BUFFER_INDEX         ;
         stx     $F9                             ;
         ldy     $FF                             ;
         iny                                     ;
 @3:     lda     RECITER_BUFFER,x                ;
-        sta     $F6                             ;
+        sta     ZP_CURRENT_CHARACTER_PROPS      ;
         lda     ($FB),y                         ;
-        cmp     $F6                             ;
+        cmp     ZP_CURRENT_CHARACTER_PROPS      ;
         beq     @4                              ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 @4:     iny                                     ;
         cpy     $FE                             ;
@@ -368,13 +400,13 @@ L47F8:  sty     $FF                             ;
         stx     $F9                             ;
         jmp     @3                              ;
 
-@6:     lda     $FA                             ;
+@6:     lda     ZP_RECITER_BUFFER_INDEX         ;
         sta     $F8                             ;
 L4835:  ldy     $FF                             ;
         dey                                     ;
         sty     $FF                             ;
         lda     ($FB),y                         ;
-        sta     $F6                             ;
+        sta     ZP_CURRENT_CHARACTER_PROPS      ;
         bpl     L4843                           ;
         jmp     L49BA                           ;
 
@@ -388,9 +420,9 @@ L4843:  and     #$7F                            ;
         ldx     $F8                             ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
-        cmp     $F6                             ;
+        cmp     ZP_CURRENT_CHARACTER_PROPS      ;
         beq     @1                              ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 @1:     stx     $F8                             ;
         jmp     L4835                           ;
@@ -399,7 +431,7 @@ L4843:  and     #$7F                            ;
 
 SW1_485F:
 
-        lda     $F6                             ; Switch on content of $F6.
+        lda     ZP_CURRENT_CHARACTER_PROPS      ; Switch on content of $F6.
         cmp     #' '                            ; Handle ' ' character.
         bne     @1                              ;
         jmp     SW1_SPACE                       ;
@@ -434,7 +466,7 @@ SW1_SPACE:
         jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$80                            ;
         beq     L48A7                           ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -448,7 +480,7 @@ SW1_HASH:
         jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$40                            ;
         bne     L48A7                           ; vowel: go to L48A7
-        jmp     MATCH_NEXT                      ; non-vowel.
+        jmp     MATCH_RULE                      ; non-vowel.
 
 ; ----------------------------------------------------------------------------
 
@@ -457,7 +489,7 @@ SW1_PERIOD:
         jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$08                            ;
         bne     L48C0                           ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -474,7 +506,7 @@ SW1_AMPERSAND:
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 @1:     dex                                     ;
         lda     RECITER_BUFFER,x                ;
@@ -482,7 +514,7 @@ SW1_AMPERSAND:
         beq     L48C0                           ;
         cmp     #'S'                            ;
         beq     L48C0                           ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -494,7 +526,7 @@ SW1_AT_SIGN:
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 @1:     cmp     #'T'                            ;
         beq     @2                              ;
@@ -502,7 +534,7 @@ SW1_AT_SIGN:
         beq     @2                              ;
         cmp     #'S'                            ;
         beq     @2                              ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 @2:     stx     $F8                             ;
         jmp     L4835                           ;
@@ -514,7 +546,7 @@ SW1_CARET:
         jsr     SUB_GET_CHAR_PROPERTY_F8_PREV   ;
         and     #$20                            ;
         bne     L4914                           ; consonant.
-        jmp     MATCH_NEXT                      ; non-consonant.
+        jmp     MATCH_RULE                      ; non-consonant.
 
 ; ----------------------------------------------------------------------------
 
@@ -534,7 +566,7 @@ SW1_PLUS:
         beq     L4914                           ;
         cmp     #'Y'                            ;
         beq     L4914                           ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -628,7 +660,7 @@ L49A3:  cmp     #'I'                            ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'G'                            ;
         beq     L4972                           ;
-L49B7:  jmp     MATCH_NEXT                      ;
+L49B7:  jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -636,13 +668,13 @@ L49BA:  lda     $F9                             ;
         sta     $F7                             ;
 L49BE:  ldy     $FE                             ;
         iny                                     ;
-        cpy     $FD                             ;
+        cpy     ZP_CURRENT_CHARACTER            ;
         bne     @1                              ;
         jmp     L4ACD                           ;
 
 @1:     sty     $FE                             ;
         lda     ($FB),y                         ;
-        sta     $F6                             ;
+        sta     ZP_CURRENT_CHARACTER_PROPS      ;
         tax                                     ;
         lda     CHARACTER_PROPERTY,x            ;
         and     #$80                            ;
@@ -650,9 +682,9 @@ L49BE:  ldy     $FE                             ;
         ldx     $F7                             ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
-        cmp     $F6                             ;
+        cmp     ZP_CURRENT_CHARACTER_PROPS      ;
         beq     L49E3                           ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -663,7 +695,7 @@ L49E3:  stx     $F7                             ;
 
 SW2_49E8:
 
-        lda     $F6                             ; Switch on content of $F5.
+        lda     ZP_CURRENT_CHARACTER_PROPS      ; Switch on content of $F6.
         cmp     #' '                            ; Handle ' ' character.
         bne     @1                              ;
         jmp     SW2_SPACE                       ;
@@ -701,7 +733,7 @@ SW2_SPACE:
         jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$80                            ;
         beq     L4A37                           ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -715,7 +747,7 @@ SW2_HASH:
         jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$40                            ;
         bne     L4A37                           ; vowel: go to L4A37.
-        jmp     MATCH_NEXT                      ; non-vowel
+        jmp     MATCH_RULE                      ; non-vowel
 
 ; ----------------------------------------------------------------------------
 
@@ -724,7 +756,7 @@ SW2_PERIOD:
         jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$08                            ;
         bne     L4A50                           ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -741,7 +773,7 @@ SW2_AMPERSAND:
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 @1:     inx                                     ;
         lda     RECITER_BUFFER,x                ;
@@ -749,7 +781,7 @@ SW2_AMPERSAND:
         beq     L4A50                           ;
         cmp     #'S'                            ;
         beq     L4A50                           ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -761,7 +793,7 @@ SW2_AT_SIGN:
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 @1:     cmp     #'T'                            ;
         beq     @2                              ;
@@ -769,7 +801,7 @@ SW2_AT_SIGN:
         beq     @2                              ;
         cmp     #'S'                            ;
         beq     @2                              ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 @2:     stx     $F7                             ;
         jmp     L49BE                           ;
@@ -781,7 +813,7 @@ SW2_CARET:
         jsr     SUB_GET_CHAR_PROPERTY_F7_NEXT   ;
         and     #$20                            ;
         bne     L4AA4                           ; consonant.
-        jmp     MATCH_NEXT                      ; non-consonant.
+        jmp     MATCH_RULE                      ; non-consonant.
 
 ; ----------------------------------------------------------------------------
 
@@ -801,7 +833,7 @@ SW2_PLUS:
         beq     L4AA4                           ;
         cmp     #'Y'                            ;
         beq     L4AA4                           ;
-        jmp     MATCH_NEXT                      ;
+        jmp     MATCH_RULE                      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -817,20 +849,20 @@ SW2_COLON:
 
 ; ----------------------------------------------------------------------------
 
-L4ACD:  ldy     $FD                             ;
+L4ACD:  ldy     ZP_CURRENT_CHARACTER            ;
         lda     $F9                             ;
-        sta     $FA                             ;
+        sta     ZP_RECITER_BUFFER_INDEX         ;
 @1:     lda     ($FB),y                         ;
-        sta     $F6                             ;
+        sta     ZP_CURRENT_CHARACTER_PROPS      ;
         and     #$7F                            ;
         cmp     #'='                            ;
         beq     @2                              ;
-        inc     $F5                             ;
-        ldx     $F5                             ;
+        inc     ZP_SAM_BUFFER_INDEX             ;
+        ldx     ZP_SAM_BUFFER_INDEX             ;
         sta     SAM_BUFFER,x                    ;
-@2:     bit     $F6                             ;
+@2:     bit     ZP_CURRENT_CHARACTER_PROPS      ;
         bpl     @3                              ;
-        jmp     L474A                           ;
+        jmp     TRANSLATE_NEXT_CHARACTER        ;
 
 @3:     iny                                     ;
         jmp     @1                              ;
