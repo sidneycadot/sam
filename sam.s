@@ -25,6 +25,7 @@
         .importzp STARP
         .import MEMLO
         .import BASIC
+        .import CONSOL
         .import AUDC1
         .import IRQEN
         .import DMACTL
@@ -56,6 +57,51 @@
 ; ----------------------------------------------------------------------------
 
         .segment "SAM_BLOCK1"
+
+; ----------------------------------------------------------------------------
+
+ZP_CB := $CB                                    ;
+ZP_CC := $CC                                    ;
+ZP_CD := $CD                                    ;
+ZP_CE := $CE                                    ;
+ZP_CF := $CF                                    ;
+ZP_D0 := $D0                                    ;
+ZP_D1 := $D1                                    ;
+
+ZP_E0 := $E0                                    ;
+ZP_E1 := $E1                                    ;
+ZP_E2 := $E2                                    ;
+ZP_E3 := $E3                                    ;
+ZP_E4 := $E4                                    ;
+ZP_E5 := $E5                                    ;
+ZP_E6 := $E6                                    ;
+ZP_E7 := $E7                                    ;
+ZP_E8 := $E8                                    ;
+ZP_E9 := $E9                                    ;
+ZP_EA := $EA                                    ;
+ZP_EB := $EB                                    ;
+ZP_EC := $EC                                    ;
+ZP_ED := $ED                                    ;
+ZP_EE := $EE                                    ;
+ZP_EF := $EF                                    ;
+ZP_F0 := $F0                                    ;
+ZP_F1 := $F1                                    ;
+ZP_F2 := $F2                                    ;
+ZP_F3 := $F3                                    ;
+ZP_F4 := $F4                                    ;
+ZP_F5 := $F5                                    ;
+ZP_F6 := $F6                                    ;
+ZP_F7 := $F7                                    ;
+ZP_F8 := $F8                                    ;
+ZP_F9 := $F9                                    ;
+ZP_FA := $FA                                    ;
+ZP_FB := $FB                                    ;
+ZP_FC := $FC                                    ;
+ZP_FD := $FD                                    ;
+ZP_FE := $FE                                    ;
+ZP_FF := $FF                                    ;
+
+; ----------------------------------------------------------------------------
 
         ; SAM entry point from BASIC (address 8192).
         ; SAM$ is assumed to contain a string holding phonemes.
@@ -101,7 +147,7 @@ D200E:  .byte   $41                             ; Mode #1 self-modifying code in
 D200F:  .byte   $40                             ; Mode #1 self-modifying code initializer.
 D2010:  .byte   $46                             ; Mode #0 self-modifying code initializer.
 D2011:  .byte   $40                             ; Mode #0 self-modifying code initializer.
-MODE:   .byte   $00                             ; 0 = regular, 1 = dubug (?)
+MODE:   .byte   $00                             ; Mode 0 = regular, Mode 1 = debug (?)
 D2013:  .byte   $FF                             ;
 
 ; ----------------------------------------------------------------------------
@@ -119,7 +165,7 @@ SAM_BUFFER:
 RUN_SAM_FROM_BASIC:             ; Entry point from BASIC (after PLA).
 
         jsr     SAM_COPY_BASIC_SAM_STRING       ; Find and copy SAM$.
-        lda     $CB                             ; Is result zero (good?)
+        lda     ZP_CB                           ; Is result zero (good?)
         beq     RUN_SAM_FROM_MACHINE_CODE       ; Yes: play the phonemes.
         rts                                     ; No: return to BASIC.
 
@@ -135,7 +181,7 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
 
         lda     #$FF                            ;
         sta     D2013                           ;
-        jsr     SUB_26EA                        ;
+        jsr     SUB_26EA                        ; Translate phonemes to binary.
         lda     D2013                           ;
         cmp     #$FF                            ;
         bne     @5                              ;
@@ -164,11 +210,11 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
 
 @mode0: lda     #0                              ; Mode #0
         sta     DMACTL                          ; Disable DMA (Antic)
-        lda     #$10                            ; Initialize self-modifying code values.
+        lda     #16                             ; Initialize self-modifying code values.
         sta     SMC4210                         ;
-        lda     #$0D                            ;
+        lda     #13                             ;
         sta     SMC42B0                         ;
-        lda     #$0C                            ;
+        lda     #12                             ;
         sta     SMC42DF                         ;
         lda     D2011                           ;
         sta     SMC403F                         ;
@@ -176,7 +222,7 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
         sta     SMC421F                         ;
 
 @join:  lda     D2262,x                         ;
-        cmp     #$50                            ;
+        cmp     #80                             ;
         bcs     @3                              ;
         inx                                     ;
         bne     @join                           ;
@@ -190,8 +236,8 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
         jsr     SUB_43AA                        ;
 
         ldx     #0                              ; All done. Should we restore the DMA and interrupt state?
-        cpx     $CD                             ;
-        stx     $CD                             ;
+        cpx     ZP_CD                           ;
+        stx     ZP_CD                           ;
         beq     @5                              ;
         rts                                     ;
 
@@ -213,108 +259,108 @@ SAM_COPY_BASIC_SAM_STRING:
         ; If not found, we return to BASIC.
 
         lda     #0                              ; Initialize $CB, $CC, $CD to zero.
-        sta     $CB                             ; ($CB, $CC) holds the variable index.
-        sta     $CC                             ;
-        sta     $CD                             ;
+        sta     ZP_CB                           ; ($CB, $CC) holds the variable index.
+        sta     ZP_CC                           ;
+        sta     ZP_CD                           ;
 
         lda     VNTP                            ; Copy variable name table pointer VNTP to ($CE, $CF).
-        sta     $CE                             ;
+        sta     ZP_CE                           ;
         lda     VNTP+1                          ;
-        sta     $CF                             ;
+        sta     ZP_CF                           ;
 
         lda     STARP                           ; String and array pointer STARP to ($D0, $D1).
-        sta     $D0                             ;
+        sta     ZP_D0                           ;
         lda     STARP+1                         ;
-        sta     $D1                             ;
+        sta     ZP_D1                           ;
 
 @check_variable:
 
         ldy     #0                              ; Check if we find "SAM$" at the location pointed to by
-        lda     ($CE),y                         ; ($CE, $CF).
+        lda     (ZP_CE),y                       ; ($CE, $CF).
         cmp     #'S'                            ;
         bne     @not_found_here                 ; If not found, proceed to @not_found_here.
         iny                                     ;
-        lda     ($CE),y                         ;
+        lda     (ZP_CE),y                       ;
         cmp     #'A'                            ;
         bne     @not_found_here                 ;
         iny                                     ;
-        lda     ($CE),y                         ;
+        lda     (ZP_CE),y                       ;
         cmp     #'M'                            ;
         bne     @not_found_here                 ;
         iny                                     ;
-        lda     ($CE),y                         ;
+        lda     (ZP_CE),y                       ;
         cmp     #'$' + $80                      ;
         bne     @not_found_here                 ;
         jmp     @found_sam_string_variable      ; If found, proceed to @found_sam_string_variable.
 
 @not_found_here:
 
-        lda     $CE                             ; Check if pointer ($CE, $CF) is identical to ($84, $85), which
+        lda     ZP_CE                           ; Check if pointer ($CE, $CF) is identical to ($84, $85), which
         cmp     VNTD                            ; is the end of BASIC variable memory.
         bne     @continue_search                ;
-        lda     $CF                             ; If not equal, proceed at @3.
+        lda     ZP_CF                           ; If not equal, proceed at @3.
         cmp     VNTD+1                          ; If equal, we've reached the end of the BASIC program; go to @end.
         beq     @report_error                   ;
 
 @continue_search:
 
         ldy     #0                              ;
-        lda     ($CE),y                         ;
+        lda     (ZP_CE),y                       ;
         bpl     @4                              ;
-        inc     $CB                             ; Increment variable index whenever we pass through a character with its most significant bit set.
-@4:     inc     $CE                             ; Increment ($CE, $CF).
+        inc     ZP_CB                           ; Increment variable index whenever we pass through a character with its most significant bit set.
+@4:     inc     ZP_CE                           ; Increment (ZP_CE, ZP_CF).
         bne     @5                              ;
-        inc     $CF                             ;
+        inc     ZP_CF                           ;
 @5:     jmp     @check_variable                 ; Proceed to check the next variable.
 
 @found_sam_string_variable:
 
-        clc                                     ; Multiply ($CB, $CC) by 8.
-        asl     $CB                             ;
-        rol     $CC                             ;
-        asl     $CB                             ;
-        rol     $CC                             ;
-        asl     $CB                             ;
-        rol     $CC                             ;
+        clc                                     ; Multiply (ZP_CB, ZP_CC) by 8.
+        asl     ZP_CB                           ;
+        rol     ZP_CC                           ;
+        asl     ZP_CB                           ;
+        rol     ZP_CC                           ;
+        asl     ZP_CB                           ;
+        rol     ZP_CC                           ;
 
         clc                                     ; Add pointer VVTP (variable value table).
-        lda     $CB                             ;
+        lda     ZP_CB                           ;
         adc     VVTP                            ;
-        sta     $CB                             ;
-        lda     $CC                             ;
+        sta     ZP_CB                           ;
+        lda     ZP_CC                           ;
         adc     VVTP+1                          ;
-        sta     $CC                             ;
+        sta     ZP_CC                           ;
 
         ldy     #5                              ; If size of string exceeds 255, report error.
-        lda     ($CB),y                         ;
+        lda     (ZP_CB),y                       ;
         bne     @report_error                   ;
-        dey                                     ; Copy size into $CD.
-        lda     ($CB),y                         ;
-        sta     $CD                             ;
+        dey                                     ; Copy size into ZP_CD.
+        lda     (ZP_CB),y                       ;
+        sta     ZP_CD                           ;
 
         ldy     #2                              ;
-        lda     ($CB),y                         ;
+        lda     (ZP_CB),y                       ;
         clc                                     ;
-        adc     $D0                             ;
-        sta     $D0                             ;
+        adc     ZP_D0                           ;
+        sta     ZP_D0                           ;
         ldy     #3                              ;
-        lda     ($CB),y                         ;
-        adc     $D1                             ;
-        sta     $D1                             ;
+        lda     (ZP_CB),y                       ;
+        adc     ZP_D1                           ;
+        sta     ZP_D1                           ;
 
         ldy     #0                              ; Copy content of SAM$ into SAM_BUFFER.
-@copy:  lda     ($D0),y                         ;
+@copy:  lda     (ZP_D0),y                       ;
         sta     SAM_BUFFER,y                    ;
         iny                                     ;
-        cpy     $CD                             ;
+        cpy     ZP_CD                           ;
         bne     @copy                           ;
 
         lda     #$9B                            ; Append closing $9B character.
         sta     SAM_BUFFER,y                    ;
 
-        lda     #0                              ; Zero values $CB, $CD.
-        sta     $CB                             ;
-        sta     $CD                             ;
+        lda     #0                              ; Zero values ZP_CB, ZP_CD.
+        sta     ZP_CB                           ;
+        sta     ZP_CD                           ;
 
         rts                                     ; Return succesfully.
 
@@ -322,7 +368,7 @@ SAM_COPY_BASIC_SAM_STRING:
 
         jsr     SAM_ERROR_SOUND                 ; Sound an error.
         lda     #1                              ;
-        sta     $CB                             ; Report error as result to basic (USR function result).
+        sta     ZP_CB                           ; Report error.
         rts                                     ; Done.
 
 ; ----------------------------------------------------------------------------
@@ -427,8 +473,89 @@ D2462:  .byte   $04,$03,$00,$00,$00,$00,$00,$00 ; 2462 04 03 00 00 00 00 00 00  
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 2552 00 00 00 00 00 00 00 00  ........
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 255A 00 00 00 00 00 00 00 00  ........
 
-D2562:  .byte   $2A,$31,$32,$33,$34,$35,$36,$37 ; 2562 2A 31 32 33 34 35 36 37  *1234567
-        .byte   $38,$39                         ; 256A 38 39                    89
+STRESS:  .byte   "*123456789"          ; Note: stress markers are the characters 1..8.
+
+        ;  *     0    timing
+        ; .*     1    inflection
+        ; ?*     2    inflection
+        ; ,*     3    timing
+        ; -*     4    timing
+        ; IY     5    vowel
+        ; IH     6    vowel
+        ; EH     7    vowel
+        ; AE     8    vowel
+        ; AA     9    vowel
+        ; AH    10    vowel
+        ; AO    11    vowel
+        ; UH    12    vowel
+        ; AX    13    vowel
+        ; IX    14    vowel
+        ; ER    15    vowel
+        ; UX    16    vowel
+        ; OH    17    vowel
+        ; RX    18    internal
+        ; LX    19    internal
+        ; WX    20    internal
+        ; YX    21    internal
+        ; WH    22    voiced consonant
+        ; R*    23    voiced consonant
+        ; L*    24    voiced consonant
+        ; W*    25    voiced consonant
+        ; Y*    26    voiced consonant
+        ; M*    27    voiced consonant
+        ; N*    28    voiced consonant
+        ; NX    29    voiced consonant
+        ; DX    30    internal
+        ; Q*    31    special phoneme
+        ; S*    32    unvoiced consonant
+        ; SH    33    unvoiced consonant
+        ; F*    34    unvoiced consonant
+        ; TH    35    unvoiced consonant
+        ; /H    36    unvoiced consonant
+        ; /X    37    internal
+        ; Z*    38    voiced consonant
+        ; ZH    39    voiced consonant
+        ; V*    40    voiced consonant
+        ; DH    41    voiced consonant
+        ; CH    42    unvoiced consonant
+        ; **    43    n/a
+        ; J*    44    voiced consonant
+        ; **    45
+        ; **    46
+        ; **    47
+        ; EY    48    dipthongs
+        ; AY    49    dipthongs
+        ; OY    50    dipthongs
+        ; AW    51    dipthongs
+        ; OW    52    dipthongs
+        ; UW    53    dipthongs
+        ; B*    54    voiced consonant
+        ; **    55
+        ; **    56
+        ; D*    57    voiced consonant
+        ; **    58
+        ; **    59
+        ; G*    60    voiced consonant
+        ; **    61
+        ; **    62
+        ; GX    63    *** undocumented ***
+        ; **    64
+        ; **    65
+        ; P*    66    unvoiced consonant
+        ; **    67
+        ; **    68
+        ; T*    69    unvoiced consonant
+        ; **    70
+        ; **    71
+        ; K*    72    unvoiced consonant
+        ; **    73
+        ; **    74
+        ; KX    75    *** undocumented ***
+        ; **    76
+        ; **    77
+        ; UL    78    special phoneme
+        ; UM    79    special phoneme
+        ; UN    80    special phoneme
 
 PHONEMES_1ST:  .byte   " .?,-IIEAAAAUAIEUORLWYWRLWYMNNDQSSFT//ZZVDC*J***EAOAOUB**D**G**G**P**T**K**K**UUU"
 PHONEMES_2ND:  .byte   "*****YHHEAHOHXXRXHXXXXH******XX**H*HHX*H*HH*****YYYWWW*********X***********X**LMN"
@@ -458,18 +585,18 @@ D265C:  .byte   $80,$C1,$C1,$C1,$C1,$00,$00,$00 ; 265C 80 C1 C1 C1 C1 00 00 00  
 
 SUB_26AA:
 
-        sta     $FC                             ;
-        stx     $FB                             ;
-        sty     $FA                             ;
+        sta     ZP_FC                           ;
+        stx     ZP_FB                           ;
+        sty     ZP_FA                           ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
 SUB_26B1:
 
-        lda     $FC                             ;
-        ldx     $FB                             ;
-        ldy     $FA                             ;
+        lda     ZP_FC                           ;
+        ldx     ZP_FB                           ;
+        ldy     ZP_FA                           ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
@@ -478,7 +605,7 @@ SUB_26B8:
 
         jsr     SUB_26AA                        ;
         ldx     #$FF                            ;
-        ldy     #$00                            ;
+        ldy     #0                              ;
 @1:     dex                                     ;
         dey                                     ;
         lda     D2262,x                         ;
@@ -487,26 +614,26 @@ SUB_26B8:
         sta     D2362,y                         ;
         lda     D2462,x                         ;
         sta     D2462,y                         ;
-        cpx     $F6                             ;
+        cpx     ZP_F6                           ;
         bne     @1                              ;
-        lda     $F9                             ;
+        lda     ZP_F9                           ;
         sta     D2262,x                         ;
-        lda     $F8                             ;
+        lda     ZP_F8                           ;
         sta     D2362,x                         ;
-        lda     $F7                             ;
+        lda     ZP_F7                           ;
         sta     D2462,x                         ;
         jsr     SUB_26B1                        ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
-SUB_26EA:                                       ; Called by SAM_SAY_PHONEMES.
+SUB_26EA:                                       ; First subroutine called by SAM_SAY_PHONEMES.
 
         ldx     #0                              ; Initialize A, X, Y registers to zero.
         txa                                     ;
         tay                                     ;
 
-        sta     $FF                             ; Set $FF to 0.
+        sta     ZP_FF                           ; Set ZP_FF to 0.
 
 @init:  sta     D2462,y                         ; Initialize first 255 bytes of D4262 buffer to zero.
         iny                                     ;
@@ -519,19 +646,19 @@ SUB_26EA:                                       ; Called by SAM_SAY_PHONEMES.
         cmp     #$9B                            ;
         beq     @13                             ;
 
-        sta     $FE                             ; Copy 2-byte phoneme to $FE,$FD.
+        sta     ZP_FE                           ; Copy 2-byte phoneme to ZP_FE,ZP_FD.
         inx                                     ;
         lda     SAM_BUFFER,x                    ;
-        sta     $FD                             ;
+        sta     ZP_FD                           ;
 
         ldy     #0                              ; Search phoneme tables.
 @3:     lda     PHONEMES_1ST,y                  ;
-        cmp     $FE                             ;
+        cmp     ZP_FE                           ;
         bne     @4                              ;
         lda     PHONEMES_2ND,y                  ;
         cmp     #'*'                            ;
         beq     @4                              ;
-        cmp     $FD                             ;
+        cmp     ZP_FD                           ;
         beq     @found_phoneme                  ; Found phoneme match.
 
 @4:     iny                                     ;
@@ -542,9 +669,9 @@ SUB_26EA:                                       ; Called by SAM_SAY_PHONEMES.
 @found_phoneme:
 
         tya                                     ; Save phoneme into D2262 phoneme byte table.
-        ldy     $FF                             ;
+        ldy     ZP_FF                           ;
         sta     D2262,y                         ;
-        inc     $FF                             ;
+        inc     ZP_FF                           ;
         inx                                     ;
         jmp     @next_phoneme                   ; Process next phoneme.
 
@@ -555,7 +682,7 @@ SUB_26EA:                                       ; Called by SAM_SAY_PHONEMES.
         cmp     #'*'                            ;
         bne     @8                              ;
         lda     PHONEMES_1ST,y                  ;
-        cmp     $FE                             ;
+        cmp     ZP_FE                           ;
         beq     @9                              ;
 @8:     iny                                     ;
         cpy     #81                             ;
@@ -563,14 +690,14 @@ SUB_26EA:                                       ; Called by SAM_SAY_PHONEMES.
         beq     @10                             ;
 
 @9:     tya                                     ; Found.
-        ldy     $FF                             ;
+        ldy     ZP_FF                           ;
         sta     D2262,y                         ;
-        inc     $FF                             ;
+        inc     ZP_FF                           ;
         jmp     @next_phoneme                   ;
 
-@10:    lda     $FE                             ; Not found.
+@10:    lda     ZP_FE                           ; Not found.
         ldy     #8                              ;
-@11:    cmp     D2562,y                         ;
+@11:    cmp     STRESS,y                        ;
         beq     @12                             ;
         dey                                     ;
         bne     @11                             ;
@@ -579,13 +706,13 @@ SUB_26EA:                                       ; Called by SAM_SAY_PHONEMES.
         rts                                     ;
 
 @12:    tya                                     ;
-        ldy     $FF                             ;
+        ldy     ZP_FF                           ;
         dey                                     ;
         sta     D2462,y                         ;
         jmp     @next_phoneme                   ;
 
-@13:    lda     #$FF                            ; Set D2262+$FF buffer to 255.
-        ldy     $FF                             ;
+@13:    lda     #$FF                            ; Set D2262+$FF buffer to $FF.
+        ldy     ZP_FF                           ;
         sta     D2262,y                         ;
         rts                                     ;
 
@@ -616,51 +743,51 @@ SUB_2775:                                       ; Called by SAM_SAY_PHONEMES.
 
 SUB_279A:                                       ; Called by SAM_SAY_PHONEMES.
 
-        lda     #$00                            ;
-        sta     $FF                             ;
-@1:     ldx     $FF                             ;
+        lda     #0                              ;
+        sta     ZP_FF                           ;
+@1:     ldx     ZP_FF                           ;
         lda     D2262,x                         ;
         cmp     #$FF                            ;
         bne     @2                              ;
         rts                                     ;
 
-@2:     sta     $F9                             ;
+@2:     sta     ZP_F9                           ;
         tay                                     ;
         lda     D260E,y                         ;
         tay                                     ;
         and     #$02                            ;
         bne     @3                              ;
-        inc     $FF                             ;
+        inc     ZP_FF                           ;
         jmp     @1                              ;
 
 @3:     tya                                     ;
         and     #$01                            ;
         bne     @4                              ;
-        inc     $F9                             ;
-        ldy     $F9                             ;
+        inc     ZP_F9                           ;
+        ldy     ZP_F9                           ;
         lda     D2462,x                         ;
-        sta     $F7                             ;
+        sta     ZP_F7                           ;
         lda     D3830,y                         ;
-        sta     $F8                             ;
+        sta     ZP_F8                           ;
         inx                                     ;
-        stx     $F6                             ;
+        stx     ZP_F6                           ;
         jsr     SUB_26B8                        ;
-        inc     $F9                             ;
-        ldy     $F9                             ;
+        inc     ZP_F9                           ;
+        ldy     ZP_F9                           ;
         lda     D3830,y                         ;
-        sta     $F8                             ;
+        sta     ZP_F8                           ;
         inx                                     ;
-        stx     $F6                             ;
+        stx     ZP_F6                           ;
         jsr     SUB_26B8                        ;
-        inc     $FF                             ;
-        inc     $FF                             ;
-        inc     $FF                             ;
+        inc     ZP_FF                           ;
+        inc     ZP_FF                           ;
+        inc     ZP_FF                           ;
         jmp     @1                              ;
 
 @4:     inx                                     ;
         lda     D2262,x                         ;
         beq     @4                              ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         cmp     #$FF                            ;
         bne     @5                              ;
         jmp     @6                              ;
@@ -669,43 +796,43 @@ SUB_279A:                                       ; Called by SAM_SAY_PHONEMES.
         lda     D260E,y                         ;
         and     #$08                            ;
         bne     @7                              ;
-        lda     $F5                             ;
+        lda     ZP_F5                           ;
         cmp     #$24                            ;
         beq     @7                              ;
         cmp     #$25                            ;
         beq     @7                              ;
-@6:     ldx     $FF                             ;
+@6:     ldx     ZP_FF                           ;
         lda     D2462,x                         ;
-        sta     $F7                             ;
+        sta     ZP_F7                           ;
         inx                                     ;
-        stx     $F6                             ;
-        ldx     $F9                             ;
+        stx     ZP_F6                           ;
+        ldx     ZP_F9                           ;
         inx                                     ;
-        stx     $F9                             ;
+        stx     ZP_F9                           ;
         lda     D3830,x                         ;
-        sta     $F8                             ;
+        sta     ZP_F8                           ;
         jsr     SUB_26B8                        ;
-        inc     $F6                             ;
+        inc     ZP_F6                           ;
         inx                                     ;
-        stx     $F9                             ;
+        stx     ZP_F9                           ;
         lda     D3830,x                         ;
-        sta     $F8                             ;
+        sta     ZP_F8                           ;
         jsr     SUB_26B8                        ;
-        inc     $FF                             ;
-        inc     $FF                             ;
-@7:     inc     $FF                             ;
+        inc     ZP_FF                           ;
+        inc     ZP_FF                           ;
+@7:     inc     ZP_FF                           ;
         jmp     @1                              ;
 
 ; ----------------------------------------------------------------------------
 
 SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
 
-        lda     #$00                            ;
-        sta     $FF                             ;
-@1:     ldx     $FF                             ;
+        lda     #0                              ;
+        sta     ZP_FF                           ;
+@1:     ldx     ZP_FF                           ;
         lda     D2262,x                         ;
         bne     @2                              ;
-        inc     $FF                             ;
+        inc     ZP_FF                           ;
         jmp     @1                              ;
 
 @2:     cmp     #$FF                            ;
@@ -717,16 +844,16 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         and     #$10                            ;
         beq     @6                              ;
         lda     D2462,x                         ;
-        sta     $F7                             ;
+        sta     ZP_F7                           ;
         inx                                     ;
-        stx     $F6                             ;
+        stx     ZP_F6                           ;
         lda     D260E,y                         ;
         and     #$20                            ;
         beq     @5                              ;
         lda     #$15                            ;
-@4:     sta     $F9                             ;
+@4:     sta     ZP_F9                           ;
         jsr     SUB_26B8                        ;
-        ldx     $FF                             ;
+        ldx     ZP_FF                           ;
         jmp     @25                             ;
 
 @5:     lda     #$14                            ;
@@ -735,13 +862,13 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         cmp     #$4E                            ;
         bne     @8                              ;
         lda     #$18                            ;
-@7:     sta     $F9                             ;
+@7:     sta     ZP_F9                           ;
         lda     D2462,x                         ;
-        sta     $F7                             ;
+        sta     ZP_F7                           ;
         lda     #$0D                            ;
         sta     D2262,x                         ;
         inx                                     ;
-        stx     $F6                             ;
+        stx     ZP_F6                           ;
         jsr     SUB_26B8                        ;
         jmp     @36                             ;
 
@@ -769,15 +896,15 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         beq     @11                             ;
         lda     D2462,x                         ;
         beq     @11                             ;
-        stx     $F6                             ;
-        lda     #$00                            ;
-        sta     $F7                             ;
+        stx     ZP_F6                           ;
+        lda     #0                              ;
+        sta     ZP_F7                           ;
         lda     #$1F                            ;
-        sta     $F9                             ;
+        sta     ZP_F9                           ;
         jsr     SUB_26B8                        ;
         jmp     @36                             ;
 
-@11:    ldx     $FF                             ;
+@11:    ldx     ZP_FF                           ;
         lda     D2262,x                         ;
         cmp     #$17                            ;
         bne     @15                             ;
@@ -904,12 +1031,12 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         beq     @28                             ;
         jmp     @31                             ;
 
-@30:    sty     $F9                             ;
+@30:    sty     ZP_F9                           ;
         inx                                     ;
-        stx     $F6                             ;
+        stx     ZP_F6                           ;
         dex                                     ;
         lda     D2462,x                         ;
-        sta     $F7                             ;
+        sta     ZP_F7                           ;
         jsr     SUB_26B8                        ;
         jmp     @36                             ;
 
@@ -935,7 +1062,7 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         beq     @36                             ;
         lda     D2462,x                         ;
         bne     @36                             ;
-@34:    ldx     $FF                             ;
+@34:    ldx     ZP_FF                           ;
         lda     #$1E                            ;
         sta     D2262,x                         ;
         jmp     @36                             ;
@@ -946,16 +1073,16 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         lda     D260E,y                         ;
         and     #$80                            ;
         bne     @34                             ;
-@36:    inc     $FF                             ;
+@36:    inc     ZP_FF                           ;
         jmp     @1                              ;
 
 ; ----------------------------------------------------------------------------
 
 SUB_2A1D:                                       ; Called by SAM_SAY_PHONEMES.
 
-        lda     #$00                            ;
-        sta     $FF                             ;
-@1:     ldx     $FF                             ;
+        lda     #0                              ;
+        sta     ZP_FF                           ;
+@1:     ldx     ZP_FF                           ;
         ldy     D2262,x                         ;
         cpy     #$FF                            ;
         bne     @2                              ;
@@ -976,7 +1103,7 @@ SUB_2A1D:                                       ; Called by SAM_SAY_PHONEMES.
         dex                                     ;
         tya                                     ;
         sta     D2462,x                         ;
-@3:     inc     $FF                             ;
+@3:     inc     ZP_FF                           ;
         jmp     @1                              ;
 
 ; ----------------------------------------------------------------------------
@@ -1718,31 +1845,31 @@ D3F84:  .byte   $00,$00,$E0,$E6,$EC,$F3,$F9,$00 ; 3F84 00 00 E0 E6 EC F3 F9 00  
 SUB_3F8F:
 
         ldy     #0                              ;
-        bit     $F2                             ;
+        bit     ZP_F2                           ;
         bpl     @1                              ;
         sec                                     ;
-        lda     #$00                            ;
-        sbc     $F2                             ;
-        sta     $F2                             ;
+        lda     #0                              ;
+        sbc     ZP_F2                           ;
+        sta     ZP_F2                           ;
         ldy     #$80                            ;
-@1:     sty     $EF                             ;
-        lda     #$00                            ;
-        ldx     #$08                            ;
-@2:     asl     $F2                             ;
+@1:     sty     ZP_EF                           ;
+        lda     #0                              ;
+        ldx     #8                              ;
+@2:     asl     ZP_F2                           ;
         rol     a                               ;
-        cmp     $F1                             ;
+        cmp     ZP_F1                           ;
         bcc     @3                              ;
-        sbc     $F1                             ;
-        inc     $F2                             ;
+        sbc     ZP_F1                           ;
+        inc     ZP_F2                           ;
 @3:     dex                                     ;
         bne     @2                              ;
-        sta     $F0                             ;
-        bit     $EF                             ;
+        sta     ZP_F0                           ;
+        bit     ZP_EF                           ;
         bpl     @4                              ;
         sec                                     ;
-        lda     #$00                            ;
-        sbc     $F2                             ;
-        sta     $F2                             ;
+        lda     #0                              ;
+        sbc     ZP_F2                           ;
+        sta     ZP_F2                           ;
 @4:     rts                                     ;
 
 ; ----------------------------------------------------------------------------
@@ -1753,7 +1880,7 @@ SAM_SAVE_ZP_ADDRESSES:
         ; Note that address $E0 is not saved. (Bug?)
 
         ldx     #$1F                            ;
-@loop:  lda     $E0,x                           ;
+@loop:  lda     ZP_E0,x                         ;
         sta     D2A4F,x                         ;
         dex                                     ;
         bne     @loop                           ;
@@ -1768,7 +1895,7 @@ SAM_RESTORE_ZP_ADDRESSES:
 
         ldx     #$1F                            ;
 @loop:  lda     D2A4F,x                         ;
-        sta     $E0,x                           ;
+        sta     ZP_E0,x                         ;
         dex                                     ;
         bne     @loop                           ;
         rts                                     ;
@@ -1784,10 +1911,10 @@ SUB_3FD6:
 
 @1:     lda     #0                              ;
         tax                                     ;
-        sta     $E9                             ;
-L3FE3:  ldy     $E9                             ;
+        sta     ZP_E9                           ;
+L3FE3:  ldy     ZP_E9                           ;
         lda     D3EC0,y                         ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         cmp     #$FF                            ;
         bne     @100                            ;
         jmp     L404E                           ;
@@ -1805,14 +1932,14 @@ L3FE3:  ldy     $E9                             ;
 ; ----------------------------------------------------------------------------
 
 L3FFF:  lda     D3EFC,y                         ;
-        sta     $E8                             ;
+        sta     ZP_E8                           ;
         lda     D3F38,y                         ;
-        sta     $E7                             ;
-        ldy     $E8                             ;
+        sta     ZP_E7                           ;
+        ldy     ZP_E8                           ;
         iny                                     ;
         lda     D3F84,y                         ;
-        sta     $E8                             ;
-        ldy     $F5                             ;
+        sta     ZP_E8                           ;
+        ldy     ZP_F5                           ;
 L4013:  lda     D3600,y                         ;
         sta     D2F00,x                         ;
         lda     D3650,y                         ;
@@ -1832,16 +1959,16 @@ L4013:  lda     D3600,y                         ;
 SMC403F := * + 1                                ; Self-modifying code: argument of lda #imm below.
 
         lda     #$40                            ;
-        adc     $E8                             ;
+        adc     ZP_E8                           ;
         sta     D2E00,x                         ;
         inx                                     ;
-        dec     $E7                             ;
+        dec     ZP_E7                           ;
         bne     L4013                           ;
-        inc     $E9                             ;
+        inc     ZP_E9                           ;
         bne     L3FE3                           ;
-L404E:  lda     #$00                            ;
-        sta     $E9                             ;
-        sta     $EE                             ;
+L404E:  lda     #0                              ;
+        sta     ZP_E9                           ;
+        sta     ZP_EE                           ;
         tax                                     ;
 @900:   ldy     D3EC0,x                         ;
         inx                                     ;
@@ -1852,187 +1979,187 @@ L404E:  lda     #$00                            ;
 
 @100:   tax                                     ;
         lda     D3920,x                         ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         lda     D3920,y                         ;
-        cmp     $F5                             ;
+        cmp     ZP_F5                           ;
         beq     @102                            ;
         bcc     @101                            ;
         lda     D3880,y                         ;
-        sta     $E8                             ;
+        sta     ZP_E8                           ;
         lda     D38D0,y                         ;
-        sta     $E7                             ;
+        sta     ZP_E7                           ;
         jmp     @103                            ;
 
 @101:   lda     D38D0,x                         ;
-        sta     $E8                             ;
+        sta     ZP_E8                           ;
         lda     D3880,x                         ;
-        sta     $E7                             ;
+        sta     ZP_E7                           ;
         jmp     @103                            ;
 
 @102:   lda     D3880,y                         ;
-        sta     $E8                             ;
+        sta     ZP_E8                           ;
         lda     D3880,x                         ;
-        sta     $E7                             ;
+        sta     ZP_E7                           ;
 @103:   clc                                     ;
-        lda     $EE                             ;
-        ldy     $E9                             ;
+        lda     ZP_EE                           ;
+        ldy     ZP_E9                           ;
         adc     D3F38,y                         ;
-        sta     $EE                             ;
-        adc     $E7                             ;
-        sta     $EA                             ;
-        lda     #$00                            ;
-        sta     $EB                             ;
+        sta     ZP_EE                           ;
+        adc     ZP_E7                           ;
+        sta     ZP_EA                           ;
+        lda     #0                              ;
+        sta     ZP_EB                           ;
         lda     #$2E                            ;
-        sta     $EC                             ;
+        sta     ZP_EC                           ;
         sec                                     ;
-        lda     $EE                             ;
-        sbc     $E8                             ;
-        sta     $E6                             ;
+        lda     ZP_EE                           ;
+        sbc     ZP_E8                           ;
+        sta     ZP_E6                           ;
         clc                                     ;
-        lda     $E8                             ;
-        adc     $E7                             ;
-        sta     $E3                             ;
+        lda     ZP_E8                           ;
+        adc     ZP_E7                           ;
+        sta     ZP_E3                           ;
         tax                                     ;
         dex                                     ;
         dex                                     ;
         bpl     @150                            ;
         jmp     @500                            ;
 
-@150:   lda     $E3                             ;
-        sta     $E5                             ;
-        lda     $EC                             ;
+@150:   lda     ZP_E3                           ;
+        sta     ZP_E5                           ;
+        lda     ZP_EC                           ;
         cmp     #$2E                            ;
         bne     @200                            ;
-        ldy     $E9                             ;
+        ldy     ZP_E9                           ;
         lda     D3F38,y                         ;
         lsr     a                               ;
-        sta     $E1                             ;
+        sta     ZP_E1                           ;
         iny                                     ;
         lda     D3F38,y                         ;
         lsr     a                               ;
-        sta     $E2                             ;
+        sta     ZP_E2                           ;
         clc                                     ;
-        lda     $E1                             ;
-        adc     $E2                             ;
-        sta     $E5                             ;
+        lda     ZP_E1                           ;
+        adc     ZP_E2                           ;
+        sta     ZP_E5                           ;
         clc                                     ;
-        lda     $EE                             ;
-        adc     $E2                             ;
-        sta     $E2                             ;
+        lda     ZP_EE                           ;
+        adc     ZP_E2                           ;
+        sta     ZP_E2                           ;
         sec                                     ;
-        lda     $EE                             ;
-        sbc     $E1                             ;
-        sta     $E1                             ;
-        ldy     $E2                             ;
-        lda     ($EB),y                         ;
+        lda     ZP_EE                           ;
+        sbc     ZP_E1                           ;
+        sta     ZP_E1                           ;
+        ldy     ZP_E2                           ;
+        lda     (ZP_EB),y                       ;
         sec                                     ;
-        ldy     $E1                             ;
-        sbc     ($EB),y                         ;
-        sta     $F2                             ;
-        lda     $E5                             ;
-        sta     $F1                             ;
+        ldy     ZP_E1                           ;
+        sbc     (ZP_EB),y                       ;
+        sta     ZP_F2                           ;
+        lda     ZP_E5                           ;
+        sta     ZP_F1                           ;
         jsr     SUB_3F8F                        ;
-        ldx     $E5                             ;
-        ldy     $E1                             ;
+        ldx     ZP_E5                           ;
+        ldy     ZP_E1                           ;
         jmp     @199                            ;
 
-@200:   ldy     $EA                             ;
+@200:   ldy     ZP_EA                           ;
         sec                                     ;
-        lda     ($EB),y                         ;
-        ldy     $E6                             ;
-        sbc     ($EB),y                         ;
-        sta     $F2                             ;
-        lda     $E5                             ;
-        sta     $F1                             ;
+        lda     (ZP_EB),y                       ;
+        ldy     ZP_E6                           ;
+        sbc     (ZP_EB),y                       ;
+        sta     ZP_F2                           ;
+        lda     ZP_E5                           ;
+        sta     ZP_F1                           ;
         jsr     SUB_3F8F                        ;
-        ldx     $E5                             ;
-        ldy     $E6                             ;
-@199:   lda     #$00                            ;
-        sta     $F5                             ;
+        ldx     ZP_E5                           ;
+        ldy     ZP_E6                           ;
+@199:   lda     #0                              ;
+        sta     ZP_F5                           ;
         clc                                     ;
-@399:   lda     ($EB),y                         ;
-        adc     $F2                             ;
-        sta     $ED                             ;
+@399:   lda     (ZP_EB),y                       ;
+        adc     ZP_F2                           ;
+        sta     ZP_ED                           ;
         iny                                     ;
         dex                                     ;
         beq     @402                            ;
         clc                                     ;
-        lda     $F5                             ;
-        adc     $F0                             ;
-        sta     $F5                             ;
-        cmp     $E5                             ;
+        lda     ZP_F5                           ;
+        adc     ZP_F0                           ;
+        sta     ZP_F5                           ;
+        cmp     ZP_E5                           ;
         bcc     @401                            ;
-        lda     $F5                             ;
-        sbc     $E5                             ;
-        sta     $F5                             ;
-        bit     $EF                             ;
+        lda     ZP_F5                           ;
+        sbc     ZP_E5                           ;
+        sta     ZP_F5                           ;
+        bit     ZP_EF                           ;
         bmi     @400                            ;
-        inc     $ED                             ;
+        inc     ZP_ED                           ;
         bne     @401                            ;
-@400:   dec     $ED                             ;
-@401:   lda     $ED                             ;
-        sta     ($EB),y                         ;
+@400:   dec     ZP_ED                           ;
+@401:   lda     ZP_ED                           ;
+        sta     (ZP_EB),y                       ;
         clc                                     ;
         bcc     @399                            ;
-@402:   inc     $EC                             ;
-        lda     $EC                             ;
+@402:   inc     ZP_EC                           ;
+        lda     ZP_EC                           ;
         cmp     #$35                            ;
         beq     @500                            ;
         jmp     @150                            ;
 
-@500:   inc     $E9                             ;
-        ldx     $E9                             ;
+@500:   inc     ZP_E9                           ;
+        ldx     ZP_E9                           ;
         jmp     @900                            ;
 
-@600:   lda     $EE                             ;
+@600:   lda     ZP_EE                           ;
         clc                                     ;
-        ldy     $E9                             ;
+        ldy     ZP_E9                           ;
         adc     D3F38,y                         ;
-        sta     $ED                             ;
-        ldx     #$00                            ;
+        sta     ZP_ED                           ;
+        ldx     #0                              ;
 @798:   lda     D2F00,x                         ;
         lsr     a                               ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         sec                                     ;
         lda     D2E00,x                         ;
         sbc     $F5                             ;
         sta     D2E00,x                         ;
         dex                                     ;
         bne     @798                            ;
-        lda     #$00                            ;
-        sta     $E8                             ;
-        sta     $E7                             ;
-        sta     $E6                             ;
-        sta     $EE                             ;
+        lda     #0                              ;
+        sta     ZP_E8                           ;
+        sta     ZP_E7                           ;
+        sta     ZP_E6                           ;
+        sta     ZP_EE                           ;
         lda     #$48                            ;
-        sta     $EA                             ;
+        sta     ZP_EA                           ;
         lda     #$03                            ;
-        sta     $F5                             ;
-        lda     #$00                            ;
-        sta     $EB                             ;
+        sta     ZP_F5                           ;
+        lda     #0                              ;
+        sta     ZP_EB                           ;
         lda     #$32                            ;
-        sta     $EC                             ;
-@799:   ldy     #$00                            ;
-@800:   lda     ($EB),y                         ;
+        sta     ZP_EC                           ;
+@799:   ldy     #0                              ;
+@800:   lda     (ZP_EB),y                       ;
         tax                                     ;
         lda     D3F74,x                         ;
-        sta     ($EB),y                         ;
+        sta     (ZP_EB),y                       ;
         dey                                     ;
         bne     @800                            ;
-        inc     $EC                             ;
-        dec     $F5                             ;
+        inc     ZP_EC                           ;
+        dec     ZP_F5                           ;
         bne     @799                            ;
-        ldy     #$00                            ;
+        ldy     #0                              ;
         lda     D2E00,y                         ;
-        sta     $E9                             ;
+        sta     ZP_E9                           ;
         tax                                     ;
         lsr     a                               ;
         lsr     a                               ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         sec                                     ;
         txa                                     ;
-        sbc     $F5                             ;
-        sta     $E3                             ;
+        sbc     ZP_F5                           ;
+        sta     ZP_E3                           ;
         jmp     L41CE                           ;
 
 ; ----------------------------------------------------------------------------
@@ -2040,36 +2167,36 @@ L404E:  lda     #$00                            ;
 L41C2:  jsr     SUB_426A                        ;
         iny                                     ;
         iny                                     ;
-        dec     $ED                             ;
-        dec     $ED                             ;
+        dec     ZP_ED                           ;
+        dec     ZP_ED                           ;
         jmp     L421B                           ;
 
 ; ----------------------------------------------------------------------------
 
 L41CE:  lda     D3500,y                         ;
-        sta     $E4                             ;
+        sta     ZP_E4                           ;
         and     #$F8                            ;
         bne     L41C2                           ;
-        ldx     $E8                             ;
+        ldx     ZP_E8                           ;
         clc                                     ;
         lda     D2B00,x                         ;
         ora     D3200,y                         ;
         tax                                     ;
         lda     D2D00,x                         ;
-        sta     $F5                             ;
-        ldx     $E7                             ;
+        sta     ZP_F5                           ;
+        ldx     ZP_E7                           ;
         lda     D2B00,x                         ;
         ora     D3300,y                         ;
         tax                                     ;
         lda     D2D00,x                         ;
-        adc     $F5                             ;
-        sta     $F5                             ;
-        ldx     $E6                             ;
+        adc     ZP_F5                           ;
+        sta     ZP_F5                           ;
+        ldx     ZP_E6                           ;
         lda     D2C00,x                         ;
         ora     D3400,y                         ;
         tax                                     ;
         lda     D2D00,x                         ;
-        adc     $F5                             ;
+        adc     ZP_F5                           ;
         adc     #$88                            ;
         lsr     a                               ;
         lsr     a                               ;
@@ -2083,10 +2210,10 @@ SMC4210 := * + 1                                ; Self-modifying code: argument 
         ldx     #$10                            ;
 @100:   dex                                     ;
         bne     @100                            ;
-        dec     $EA                             ;
+        dec     ZP_EA                           ;
         bne     L4222                           ;
         iny                                     ;
-        dec     $ED                             ;
+        dec     ZP_ED                           ;
 L421B:  bne     L421E                           ;
         rts                                     ;
 
@@ -2097,30 +2224,30 @@ L421E:
 SMC421F := * + 1                                ; Self-modifying code: argument of lda #imm below.
 
         lda     #$46                            ;
-        sta     $EA                             ;
-L4222:  dec     $E9                             ;
+        sta     ZP_EA                           ;
+L4222:  dec     ZP_E9                           ;
         bne     @101                            ;
 @100:   lda     D2E00,y                         ;
-        sta     $E9                             ;
+        sta     ZP_E9                           ;
         tax                                     ;
         lsr     a                               ;
         lsr     a                               ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         sec                                     ;
         txa                                     ;
-        sbc     $F5                             ;
-        sta     $E3                             ;
-        lda     #$00                            ;
-        sta     $E8                             ;
-        sta     $E7                             ;
-        sta     $E6                             ;
+        sbc     ZP_F5                           ;
+        sta     ZP_E3                           ;
+        lda     #0                              ;
+        sta     ZP_E8                           ;
+        sta     ZP_E7                           ;
+        sta     ZP_E6                           ;
         jmp     L41CE                           ;
 
 ; ----------------------------------------------------------------------------
 
-@101:   dec     $E3                             ;
+@101:   dec     ZP_E3                           ;
         bne     L424F                           ;
-        lda     $E4                             ;
+        lda     ZP_E4                           ;
         beq     L424F                           ;
         jsr     SUB_426A                        ;
         jmp     @100                            ;
@@ -2128,42 +2255,42 @@ L4222:  dec     $E9                             ;
 ; ----------------------------------------------------------------------------
 
 L424F:  clc                                     ;
-        lda     $E8                             ;
+        lda     ZP_E8                           ;
         adc     D2F00,y                         ;
-        sta     $E8                             ;
+        sta     ZP_E8                           ;
         clc                                     ;
-        lda     $E7                             ;
+        lda     ZP_E7                           ;
         adc     D3000,y                         ;
-        sta     $E7                             ;
+        sta     ZP_E7                           ;
         clc                                     ;
-        lda     $E6                             ;
+        lda     ZP_E6                           ;
         adc     D3100,y                         ;
-        sta     $E6                             ;
+        sta     ZP_E6                           ;
         jmp     L41CE                           ;
 
 ; ----------------------------------------------------------------------------
 
 SUB_426A:
 
-        sty     $EE                             ;
-        lda     $E4                             ;
+        sty     ZP_EE                           ;
+        lda     ZP_E4                           ;
         tay                                     ;
         and     #$07                            ;
         tax                                     ;
         dex                                     ;
-        stx     $F5                             ;
+        stx     ZP_F5                           ;
         lda     D4331,x                         ;
-        sta     $F2                             ;
+        sta     ZP_F2                           ;
         clc                                     ;
         lda     #$39                            ;
-        adc     $F5                             ;
-        sta     $EC                             ;
+        adc     ZP_F5                           ;
+        sta     ZP_EC                           ;
         lda     #$C0                            ;
-        sta     $EB                             ;
+        sta     ZP_EB                           ;
         tya                                     ;
         and     #$F8                            ;
         bne     L4296                           ;
-        ldy     $EE                             ;
+        ldy     ZP_EE                           ;
         lda     D2E00,y                         ;
         lsr     a                               ;
         lsr     a                               ;
@@ -2175,12 +2302,12 @@ SUB_426A:
 
 L4296:  eor     #$FF                            ;
         tay                                     ;
-L4299:  lda     #$08                            ;
-        sta     $F5                             ;
-        lda     ($EB),y                         ;
+L4299:  lda     #8                              ;
+        sta     ZP_F5                           ;
+        lda     (ZP_EB),y                       ;
 L429F:  asl     a                               ;
         bcc     @100                            ;
-        ldx     $F2                             ;
+        ldx     ZP_F2                           ;
         stx     AUDC1                           ;
         bne     @101                            ;
 @100:   ldx     #$15                            ;
@@ -2190,26 +2317,26 @@ L429F:  asl     a                               ;
 
 SMC42B0 := * + 1                                ; Self-modifying code: argument of ldx #imm below.
 
-        ldx     #$0D                            ;
-@102:   dex                                     ;
-        bne     @102                            ;
-        dec     $F5                             ;
+        ldx     #13                             ;
+@wait:  dex                                     ;
+        bne     @wait                           ;
+        dec     ZP_F5                           ;
         bne     L429F                           ;
         iny                                     ;
         bne     L4299                           ;
-        lda     #$01                            ;
-        sta     $E9                             ;
-        ldy     $EE                             ;
+        lda     #1                              ;
+        sta     ZP_E9                           ;
+        ldy     ZP_EE                           ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
 L42C2:  eor     #$FF                            ;
-        sta     $E8                             ;
-        ldy     $FF                             ;
-L42C8:  lda     #$08                            ;
-        sta     $F5                             ;
-        lda     ($EB),y                         ;
+        sta     ZP_E8                           ;
+        ldy     ZP_FF                           ;
+L42C8:  lda     #8                              ;
+        sta     ZP_F5                           ;
+        lda     (ZP_EB),y                       ;
 L42CE:  asl     a                               ;
         bcc     @100                            ;
         ldx     #$1A                            ;
@@ -2222,37 +2349,37 @@ L42CE:  asl     a                               ;
 
 SMC42DF := * + 1                                ; Self-modifying code: argument of ldx #imm below.
 
-        ldx     #$0C                            ;
+        ldx     #12                             ;
 @102:   dex                                     ;
         bne     @102                            ;
-        dec     $F5                             ;
+        dec     ZP_F5                           ;
         bne     L42CE                           ;
         iny                                     ;
-        inc     $E8                             ;
+        inc     ZP_E8                           ;
         bne     L42C8                           ;
-        lda     #$01                            ;
-        sta     $E9                             ;
-        sty     $FF                             ;
-        ldy     $EE                             ;
+        lda     #1                              ;
+        sta     ZP_E9                           ;
+        sty     ZP_FF                           ;
+        ldy     ZP_EE                           ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
-L42F5:  lda     #$01                            ;
-        sta     $ED                             ;
+L42F5:  lda     #1                              ;
+        sta     ZP_ED                           ;
         bne     L42FF                           ;
 
 ; ----------------------------------------------------------------------------
 
 L42FB:  lda     #$FF                            ;
-        sta     $ED                             ;
+        sta     ZP_ED                           ;
 
-L42FF:  stx     $EE                             ;
+L42FF:  stx     ZP_EE                           ;
         txa                                     ;
         sec                                     ;
         sbc     #$1E                            ;
         bcs     @1                              ;
-        lda     #$00                            ;
+        lda     #0                              ;
 @1:     tax                                     ;
 @2:     lda     D2E00,x                         ;
         cmp     #$7F                            ;
@@ -2261,16 +2388,16 @@ L42FF:  stx     $EE                             ;
         jmp     @2                              ;
 
 @3:     clc                                     ;
-        adc     $ED                             ;
-        sta     $E8                             ;
+        adc     ZP_ED                           ;
+        sta     ZP_E8                           ;
         sta     D2E00,x                         ;
 @4:     inx                                     ;
-        cpx     $EE                             ;
+        cpx     ZP_EE                           ;
         beq     @5                              ;
         lda     D2E00,x                         ;
         cmp     #$FF                            ;
         beq     @4                              ;
-        lda     $E8                             ;
+        lda     ZP_E8                           ;
         jmp     @3                              ;
 
 @5:     jmp     L3FFF                           ;
@@ -2284,20 +2411,20 @@ D4331:  .byte   $18,$1A,$17,$17,$17
 SUB_4336:
 
         ldx     #$FF                            ;
-        stx     $F3                             ;
+        stx     ZP_F3                           ;
         inx                                     ;
-        stx     $F4                             ;
-        stx     $FF                             ;
-@1:     ldx     $FF                             ;
+        stx     ZP_F4                           ;
+        stx     ZP_FF                           ;
+@1:     ldx     ZP_FF                           ;
         ldy     D2262,x                         ;
         cpy     #$FF                            ;
         bne     @2                              ;
         rts                                     ;
 
 @2:     clc                                     ;
-        lda     $F4                             ;
+        lda     ZP_F4                           ;
         adc     D2362,x                         ;
-        sta     $F4                             ;
+        sta     ZP_F4                           ;
         cmp     #$E8                            ;
         bcc     @3                              ;
         jmp     @6                              ;
@@ -2306,40 +2433,40 @@ SUB_4336:
         and     #$01                            ;
         beq     @4                              ;
         inx                                     ;
-        stx     $F6                             ;
-        lda     #$00                            ;
-        sta     $F4                             ;
-        sta     $F7                             ;
+        stx     ZP_F6                           ;
+        lda     #0                              ;
+        sta     ZP_F4                           ;
+        sta     ZP_F7                           ;
         lda     #$FE                            ;
-        sta     $F9                             ;
+        sta     ZP_F9                           ;
         jsr     SUB_26B8                        ;
-        inc     $FF                             ;
-        inc     $FF                             ;
+        inc     ZP_FF                           ;
+        inc     ZP_FF                           ;
         jmp     @1                              ;
 
-@4:     cpy     #$00                            ;
+@4:     cpy     #0                              ;
         bne     @5                              ;
-        stx     $F3                             ;
-@5:     inc     $FF                             ;
+        stx     ZP_F3                           ;
+@5:     inc     ZP_FF                           ;
         jmp     @1                              ;
 
-@6:     ldx     $F3                             ;
+@6:     ldx     ZP_F3                           ;
         lda     #$1F                            ;
         sta     D2262,x                         ;
-        lda     #$04                            ;
+        lda     #4                              ;
         sta     D2362,x                         ;
-        lda     #$00                            ;
+        lda     #0                              ;
         sta     D2462,x                         ;
         inx                                     ;
-        stx     $F6                             ;
+        stx     ZP_F6                           ;
         lda     #$FE                            ;
-        sta     $F9                             ;
-        lda     #$00                            ;
-        sta     $F4                             ;
-        sta     $F7                             ;
+        sta     ZP_F9                           ;
+        lda     #0                              ;
+        sta     ZP_F4                           ;
+        sta     ZP_F7                           ;
         jsr     SUB_26B8                        ;
         inx                                     ;
-        stx     $FF                             ;
+        stx     ZP_FF                           ;
         jmp     @1                              ;
 
 ; ----------------------------------------------------------------------------
@@ -2354,7 +2481,7 @@ D43A9:  .byte   $07                             ;
 
 SUB_43AA:
 
-        lda     #$00                            ;
+        lda     #0                              ;
         tax                                     ;
         tay                                     ;
 @1:     lda     D2262,x                         ;
@@ -2406,7 +2533,7 @@ SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
         inx                                     ;
         jmp     @1                              ;
 
-@4:     stx     $FF                             ;
+@4:     stx     ZP_FF                           ;
 @5:     dex                                     ;
         beq     @2                              ;
         ldy     D2262,x                         ;
@@ -2421,22 +2548,22 @@ SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
         and     #$04                            ;
         beq     @8                              ;
 @7:     lda     D2362,x                         ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         lsr     a                               ;
         clc                                     ;
         adc     $F5                             ;
         adc     #1                              ;
         sta     D2362,x                         ;
 @8:     inx                                     ;
-        cpx     $FF                             ;
+        cpx     ZP_FF                           ;
         bne     @6                              ;
         inx                                     ;
         jmp     @1                              ;
 
 @9:     ldx     #0                              ;
-        stx     $FF                             ;
+        stx     ZP_FF                           ;
 
-@10:    ldx     $FF                             ;
+@10:    ldx     ZP_FF                           ;
         ldy     D2262,x                         ;
         cpy     #$FF                            ;
         bne     @11                             ;
@@ -2450,24 +2577,24 @@ SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
 @12:    inx                                     ;
         ldy     D2262,x                         ;
         lda     D260E,y                         ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         and     #$40                            ;
         beq     @15                             ;
-        lda     $F5                             ;
+        lda     ZP_F5                           ;
         and     #$04                            ;
         beq     @14                             ;
         dex                                     ;
         lda     D2362,x                         ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         lsr     a                               ;
         lsr     a                               ;
         clc                                     ;
-        adc     $F5                             ;
-        adc     #$01                            ;
+        adc     ZP_F5                           ;
+        adc     #1                              ;
         sta     D2362,x                         ;
 @13:    jmp     @25                             ;
 
-@14:    lda     $F5                             ;
+@14:    lda     ZP_F5                           ;
         and     #$01                            ;
         beq     @13                             ;
         dex                                     ;
@@ -2476,10 +2603,10 @@ SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
         lsr     a                               ;
         lsr     a                               ;
         lsr     a                               ;
-        sta     $F5                             ;
+        sta     ZP_F5                           ;
         sec                                     ;
         tya                                     ;
-        sbc     $F5                             ;
+        sbc     ZP_F5                           ;
         sta     D2362,x                         ;
         jmp     @25                             ;
 
@@ -2494,10 +2621,10 @@ SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
         lda     D260E,y                         ;
         and     #$40                            ;
         beq     @16                             ;
-        ldx     $FF                             ;
+        ldx     ZP_FF                           ;
         lda     D2362,x                         ;
         sec                                     ;
-        sbc     #$01                            ;
+        sbc     #1                              ;
         sta     D2362,x                         ;
         jmp     @25                             ;
 
@@ -2511,10 +2638,10 @@ SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
         bne     @20                             ;
 @19:    jmp     @25                             ;
 
-@20:    lda     #$06                            ;
+@20:    lda     #6                              ;
         sta     D2362,x                         ;
         dex                                     ;
-        lda     #$05                            ;
+        lda     #5                              ;
         sta     D2362,x                         ;
         jmp     @25                             ;
 
@@ -2530,9 +2657,9 @@ SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
         lda     D2362,x                         ;
         lsr     a                               ;
         clc                                     ;
-        adc     #$01                            ;
+        adc     #1                              ;
         sta     D2362,x                         ;
-        ldx     $FF                             ;
+        ldx     ZP_FF                           ;
         lda     D2362,x                         ;
         lsr     a                               ;
         clc                                     ;
@@ -2553,7 +2680,7 @@ SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
         sec                                     ;
         sbc     #2                              ;
         sta     D2362,x                         ;
-@25:    inc     $FF                             ;
+@25:    inc     ZP_FF                           ;
         jmp     @10                             ;
 
 ; ----------------------------------------------------------------------------
@@ -2563,28 +2690,28 @@ SAM_ERROR_SOUND:
         ; Make error noise.
 
         lda     #2                              ;
-        sta     $CC                             ;
+        sta     ZP_CC                           ;
 @1:     lda     RTCLOK+2                        ; Load LSB of VBLANK counter.
         clc                                     ;
-        adc     #$08                            ;
+        adc     #8                              ;
         tax                                     ;
 @2:     lda     #$FF                            ;
-        sta     $D01F                           ;
-        lda     #$00                            ;
+        sta     CONSOL                          ;
+        lda     #0                              ;
         ldy     #$F0                            ;
 @3:     dey                                     ;
         bne     @3                              ;
-        sta     $D01F                           ;
+        sta     CONSOL                          ;
         ldy     #$F0                            ;
 @4:     dey                                     ;
         bne     @4                              ;
         cpx     RTCLOK+2                        ; Compare to LSB of VBLANK counter.
         bne     @2                              ;
-        dec     $CC                             ;
+        dec     ZP_CC                           ;
         beq     @6                              ;
         txa                                     ;
         clc                                     ;
-        adc     #$05                            ;
+        adc     #5                              ;
         tax                                     ;
 @5:     cpx     RTCLOK+2                        ; Compare to LSB of VBLANK counter.
         bne     @5                              ;

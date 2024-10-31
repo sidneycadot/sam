@@ -52,18 +52,20 @@
 
 ; ----------------------------------------------------------------------------
 
-        ZP_SAM_BUFFER_INDEX     := $F5  ; Destination index in the SAM_BUFFER.
-        ZP_TEMP1                := $F6  ;
-        ZP_TEMP2                := $F7  ;
-        ZP_TEMP3                := $F8  ;
-        ZP_TEMP4                := $F9  ;
-        ZP_RECITER_BUFFER_INDEX := $FA  ; Source index in the RECITER_BUFFER.
-        ZP_RULE_PTR             := $FB  ; rule pointer
-        ZP_RULE_PTR_LO          := $FB  ; rule pointer, LSB
-        ZP_RULE_PTR_HI          := $FC  ; rule pointer, MSB
-        ZP_TEMP5                := $FD  ;
-        ZP_TEMP6                := $FE  ;
-        ZP_TEMP7                := $FF  ;
+ZP_CD                   := $CD;
+
+ZP_SAM_BUFFER_INDEX     := $F5          ; Destination index in the SAM_BUFFER.
+ZP_TEMP1                := $F6          ;
+ZP_RB_SUFFIX_INDEX      := $F7          ; Reciter buffer suffix index.
+ZP_RB_PREFIX_INDEX      := $F8          ; Reciter buffer prefix index.
+ZP_RB_LAST_CHAR_INDEX   := $F9          ;
+ZP_RECITER_BUFFER_INDEX := $FA          ; Source index in the RECITER_BUFFER.
+ZP_RULE_PTR             := $FB          ; rule pointer
+ZP_RULE_PTR_LO          := $FB          ; rule pointer, LSB
+ZP_RULE_PTR_HI          := $FC          ; rule pointer, MSB
+ZP_TEMP2                := $FD          ;
+ZP_RULE_SUFFIX_INDEX    := $FE          ;
+ZP_RULE_PREFIX_INDEX    := $FF          ;
 
 ; ----------------------------------------------------------------------------
 
@@ -80,14 +82,14 @@ CHARACTER_PROPERTIES:
         ; Properties of the 96 characters we support.
         ;
         ; Value 0x00: ignore the character
-        ; bit 0 (%00000001): 0-9                                                  (digits)
-        ; bit 1 (%00000010): ! " # $ % & ' * + , - . 0-9 : ; < = > ? @ ^          (special characters and digits)
-        ; bit 2 (%00000100):       D           J   L   N       R S T           Z
-        ; bit 3 (%00001000):   B   D     G     J   L M N       R       V W     Z
-        ; bit 4 (%00010000):     C       G     J                 S         X   Z
-        ; bit 5 (%00100000):   B C D   F G H   J K L M N   P Q R S T   V W X   Z  (consonants)
-        ; bit 6 (%01000000): A       E       I           O           U       Y    (vowels)
-        ; bit 7 (%10000000): A-Z and single quote (') character                   (all letters and single quote)
+        ; bit 0 (0x01): 0-9                                                  (digits)
+        ; bit 1 (0x02): ! " # $ % & ' * + , - . 0-9 : ; < = > ? @ ^          (special characters and digits)
+        ; bit 2 (0x04):       D           J   L   N       R S T           Z
+        ; bit 3 (0x08):   B   D     G     J   L M N       R       V W     Z
+        ; bit 4 (0x10):     C       G     J                 S         X   Z
+        ; bit 5 (0x20):   B C D   F G H   J K L M N   P Q R S T   V W X   Z  (consonants)
+        ; bit 6 (0x40): A       E       I           O           U       Y    (vowels)
+        ; bit 7 (0x80): A-Z and single quote (') character                   (all letters and single quote)
 
         .res 32,%00000000                       ; ASCII control characters 0x00..0x1F are all 0x00 (ignore).
 
@@ -262,8 +264,8 @@ TRANSLATE_NEXT_CHARACTER:
         inc     ZP_RECITER_BUFFER_INDEX         ; Proceed to next character in the source (English) text.
         ldx     ZP_RECITER_BUFFER_INDEX         ;
 
-        lda     RECITER_BUFFER,x                ; Store character to process in ZP_TEMP5.
-        sta     ZP_TEMP5                        ;
+        lda     RECITER_BUFFER,x                ; Store English character to process in ZP_TEMP2.
+        sta     ZP_TEMP2                        ;
 
         cmp     #$1B                            ; Is the current character the end-of-string character $1B?
         bne     @proceed_1                      ; Nope, proceed.
@@ -301,7 +303,7 @@ TRANSLATE_NEXT_CHARACTER:
 
 @proceed_2:                                     ; The current character is not a period, or it is a period followed by a digit.
 
-        lda     ZP_TEMP5                        ; Check if the character is in the "miscellaneous symbols including digits" class.
+        lda     ZP_TEMP2                        ; Check if the English character is in the "miscellaneous symbols including digits" class.
         tay                                     ;
         lda     CHARACTER_PROPERTIES,y          ;
         sta     ZP_TEMP1                        ;
@@ -341,7 +343,7 @@ FLUSH_SAM_BUFFER:
         sta     SAM_BUFFER,x                    ;
         lda     ZP_RECITER_BUFFER_INDEX         ; Save reciter buffer index.
         sta     SAVE_RECITER_BUFFER_INDEX       ;
-        sta     $CD                             ; ??? Is this important? (Maybe for SAM?)
+        sta     ZP_CD                           ; ??? Is this important? (Maybe for SAM?)
         jsr     SAY_PHONEMES                    ; Speak the current phonemes in the SAM_BUFFER.
         lda     SAVE_RECITER_BUFFER_INDEX       ; Restore the reciter buffer index.
         sta     ZP_RECITER_BUFFER_INDEX         ;
@@ -356,7 +358,7 @@ TRANSLATE_ALPHABETIC_CHARACTER:
         bne     @good                           ; Character is alphabetic, or a single quote.
         brk                                     ; Abort. Unexpected character type.
 
-@good:  lda     ZP_TEMP5                        ; Load the English character to be processed from ZP_TEMP5.
+@good:  lda     ZP_TEMP2                        ; Load the English character to be processed from ZP_TEMP5.
         sec                                     ; Set ZP_RULE_PTR to the table entry corresponding to the letter.
         sbc     #'A'                            ;
         tax                                     ;
@@ -400,14 +402,14 @@ PROCESS_RULE:
         ; ZP_RULE_PTR points to a character in front of a rule (which has bit #7 set).
         ; (ZP_RULE_PTR),y is a left-parenthesis character.
 
-        sty     ZP_TEMP7                        ; ZP_TEMP7 is the Y offset for the '(' character.
+        sty     ZP_RULE_PREFIX_INDEX            ; ZP_RULE_PREFIX_INDEX is the Y offset for the '(' character in the rule.
 
 @1:     iny                                     ; Scan the rule definition for ')' character.
         lda     (ZP_RULE_PTR),y                 ;
         cmp     #')'                            ;
         bne     @1                              ;
 
-        sty     ZP_TEMP6                        ; ZP_TEMP6 is the Y offset for the ')' character.
+        sty     ZP_RULE_SUFFIX_INDEX            ; ZP_RULE_SUFFIX_INDEX is the Y offset for the ')' character.
 
 @2:     iny                                     ; Scan the rule definition for the '=' character.
         lda     (ZP_RULE_PTR),y                 ;
@@ -415,65 +417,65 @@ PROCESS_RULE:
         cmp     #'='                            ;   before comparing.
         bne     @2                              ;
 
-        sty     ZP_TEMP5                        ; ZP_TEMP5 is the Y offset for '=' character.
+        sty     ZP_TEMP2                        ; ZP_TEMP2 is the Y offset for '=' character.
 
         ldx     ZP_RECITER_BUFFER_INDEX         ;
-        stx     ZP_TEMP4                        ; Initialize ZP_TEMP4 with current reciter buffer index.
+        stx     ZP_RB_LAST_CHAR_INDEX           ; Initialize ZP_RB_LAST_CHAR_INDEX with current reciter buffer index.
 
-        ldy     ZP_TEMP7                        ; Check for literal match of characters between '(' and ')' in the rule.
+        ldy     ZP_RULE_PREFIX_INDEX            ; Check for literal match of characters between '(' and ')' in the rule.
         iny                                     ;
 @loop:  lda     RECITER_BUFFER,x                ; Parenthesized character is a literal match?
         sta     ZP_TEMP1                        ;
         lda     (ZP_RULE_PTR),y                 ;
         cmp     ZP_TEMP1                        ;
         beq     @4                              ;
-        jmp     TRY_NEXT_RULE                   ; Mismatch. Abandon this rule and proceed to the next one.
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 @4:     iny                                     ;
-        cpy     ZP_TEMP6                        ;
+        cpy     ZP_RULE_SUFFIX_INDEX            ;
         bne     @5                              ;
-        jmp     MATCH_BEFORE_LEFT_PARENTHESIS   ; Full literal match of parenthesized characters! Proceed to match what comes before.
+        jmp     MATCH_PREFIX                    ; Full literal match of parenthesized characters! Proceed to match what comes before.
 
-@5:     inx                                     ;
-        stx     ZP_TEMP4                        ; Update ZP_TEMP4 (the X index to the last character in the matched text
-        jmp     @loop                           ;   inside the parentheses.
+@5:     inx                                     ; Increment ZP_RB_LAST_CHAR_INDEX.
+        stx     ZP_RB_LAST_CHAR_INDEX           ;
+        jmp     @loop                           ;
 
 
-MATCH_BEFORE_LEFT_PARENTHESIS:
+MATCH_PREFIX:
 
         ; If we get here, we have a full, literal match of the parenthesized characters.
-        ; Next, try matching the characters in front of the parenthesized part of the rule.
+        ; Next, try matching the characters in front of the parenthesized part of the rule - the prefix.
 
         lda     ZP_RECITER_BUFFER_INDEX         ; Index to the anchor character in the English text.
-        sta     ZP_TEMP3                        ;
+        sta     ZP_RB_PREFIX_INDEX              ;
 
-MATCH_LEFT_RULE_CHARACTER:
+MATCH_PREFIX_CHARACTER:
 
-        ldy     ZP_TEMP7                        ;
+        ldy     ZP_RULE_PREFIX_INDEX            ;
         dey                                     ;
-        sty     ZP_TEMP7                        ;
+        sty     ZP_RULE_PREFIX_INDEX            ;
         lda     (ZP_RULE_PTR),y                 ;
         sta     ZP_TEMP1                        ; The placeholder to be matched.
         bpl     @1                              ;
-        jmp     MATCH_AFTER_RIGHT_PARENTHESIS   ; Successfully matched the match pattern before the left parenthesis.
-                                                ; Proceed to match the part after the right parenthesis.
+        jmp     MATCH_SUFFIX                    ; Successfully matched the prefix.
+                                                ; Proceed to match the suffix.
 @1:     and     #$7F                            ;
         tax                                     ;
         lda     CHARACTER_PROPERTIES,x          ;
         and     #$80                            ;
-        beq     MATCH_LEFT_PLACEHOLDER          ;
-        ldx     ZP_TEMP3                        ;
+        beq     MATCH_PREFIX_PLACEHOLDER        ;
+        ldx     ZP_RB_PREFIX_INDEX              ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     ZP_TEMP1                        ;
         beq     @2                              ;
         jmp     TRY_NEXT_RULE                   ;
 
-@2:     stx     ZP_TEMP3                        ; Update index to English character to be matched.
-        jmp     MATCH_LEFT_RULE_CHARACTER       ; Match next left rule character.
+@2:     stx     ZP_RB_PREFIX_INDEX              ; Update index to English character to be matched.
+        jmp     MATCH_PREFIX_CHARACTER          ; Match next prefix rule character.
 
 ; ----------------------------------------------------------------------------
 
-MATCH_LEFT_PLACEHOLDER:
+MATCH_PREFIX_PLACEHOLDER:
 
         ; Check for placeholder match of a pattern character to the left of the left parenthesis in the rule match-pattern.
 
@@ -481,35 +483,35 @@ MATCH_LEFT_PLACEHOLDER:
 
         cmp     #' '                            ; Handle ' ' placeholder character.
         bne     @1                              ;
-        jmp     MATCH_LEFT_SPACE                ;
+        jmp     MATCH_PREFIX_SPACE              ;
 @1:     cmp     #'#'                            ; Handle '#' placeholder character.
         bne     @2                              ;
-        jmp     MATCH_LEFT_HASH                 ;
+        jmp     MATCH_PREFIX_HASH               ;
 @2:     cmp     #'.'                            ; Handle '.' placeholder character.
         bne     @3                              ;
-        jmp     MATCH_LEFT_PERIOD               ;
+        jmp     MATCH_PREFIX_PERIOD             ;
 @3:     cmp     #'&'                            ; Handle '&' placeholder character.
         bne     @4                              ;
-        jmp     MATCH_LEFT_AMPERSAND            ;
+        jmp     MATCH_PREFIX_AMPERSAND          ;
 @4:     cmp     #'@'                            ; Handle '@' placeholder character.
         bne     @5                              ;
-        jmp     MATCH_LEFT_AT_SIGN              ;
+        jmp     MATCH_PREFIX_AT_SIGN            ;
 @5:     cmp     #'^'                            ; Handle '^' placeholder character.
         bne     @6                              ;
-        jmp     MATCH_LEFT_CARET                ;
+        jmp     MATCH_PREFIX_CARET              ;
 @6:     cmp     #'+'                            ; Handle '+' placeholder character.
         bne     @7                              ;
-        jmp     MATCH_LEFT_PLUS                 ;
+        jmp     MATCH_PREFIX_PLUS                 ;
 @7:     cmp     #':'                            ; Handle ':' placeholder character.
         bne     @8                              ;
-        jmp     MATCH_LEFT_COLON                ;
+        jmp     MATCH_PREFIX_COLON              ;
 
 @8:     jsr     SAM_ERROR_SOUND                 ; Any other character: signal error.
         brk                                     ; Abort.
 
 ; ----------------------------------------------------------------------------
 
-MATCH_LEFT_SPACE:
+MATCH_PREFIX_SPACE:
 
         ; A space character in a rule matches a small pause in the vocalisation -- a "space".
         ;
@@ -517,57 +519,57 @@ MATCH_LEFT_SPACE:
         ; Single quotes are assumed to also imply that the character is preceded by a letter,
         ; e.g. "haven't" or "brother's".
 
-        jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
+        jsr     GET_PREFIX_CHARACTER_PROPERTIES ;
         and     #$80                            ;
-        beq     GOOD_MATCH_LEFT_1               ; Match: space.
+        beq     MATCH_PREFIX_SUCCESS_1          ; Match: space.
         jmp     TRY_NEXT_RULE                   ; Mismatch: character is preceded by a letter or a single quote character.
 
 ; ----------------------------------------------------------------------------
 
-GOOD_MATCH_LEFT_1:
+MATCH_PREFIX_SUCCESS_1:
 
-        stx     ZP_TEMP3                        ;
-        jmp     MATCH_LEFT_RULE_CHARACTER       ;
+        stx     ZP_RB_PREFIX_INDEX              ;
+        jmp     MATCH_PREFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_LEFT_HASH:
+MATCH_PREFIX_HASH:
 
         ; A '#' character in a rule matches a vowel, i.e., any of:
         ;     {A, E, I, O, U, Y}.
 
-        jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
+        jsr     GET_PREFIX_CHARACTER_PROPERTIES ;
         and     #$40                            ;
-        bne     GOOD_MATCH_LEFT_1               ; Match: vowel.
+        bne     MATCH_PREFIX_SUCCESS_1          ; Match: vowel.
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-MATCH_LEFT_PERIOD:
+MATCH_PREFIX_PERIOD:
 
-        ; A '.' character in the rule being matched indicates any of the letters {B, D, G, J, L, M, N, R, V, W, Z}.
+        ; A '.' character in a rule matches any of the letters {B, D, G, J, L, M, N, R, V, W, Z}.
 
-        jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
+        jsr     GET_PREFIX_CHARACTER_PROPERTIES ;
         and     #$08                            ;
-        bne     GOOD_MATCH_LEFT_2               ; Match: {B, D, G, J, L, M, N, R, V, W, Z}.
+        bne     MATCH_PREFIX_SUCCESS_2          ; Match: {B, D, G, J, L, M, N, R, V, W, Z}.
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-GOOD_MATCH_LEFT_2:
+MATCH_PREFIX_SUCCESS_2:
 
-        stx     ZP_TEMP3                        ;
-        jmp     MATCH_LEFT_RULE_CHARACTER       ;
+        stx     ZP_RB_PREFIX_INDEX              ;
+        jmp     MATCH_PREFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_LEFT_AMPERSAND:
+MATCH_PREFIX_AMPERSAND:
 
-        ; A '&' character in the rule being matched indicates any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
+        ; A '&' character in the rule matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
 
-        jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
+        jsr     GET_PREFIX_CHARACTER_PROPERTIES ;
         and     #$10                            ;
-        bne     GOOD_MATCH_LEFT_2               ; Match: {C, G, J, S, X, Z}.
+        bne     MATCH_PREFIX_SUCCESS_2          ; Match: {C, G, J, S, X, Z}.
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
@@ -576,91 +578,95 @@ MATCH_LEFT_AMPERSAND:
 @1:     dex                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'C'                            ;
-        beq     GOOD_MATCH_LEFT_2               ; Match: "CH".
+        beq     MATCH_PREFIX_SUCCESS_2          ; Match: "CH".
         cmp     #'S'                            ;
-        beq     GOOD_MATCH_LEFT_2               ; Match: "SH".
+        beq     MATCH_PREFIX_SUCCESS_2          ; Match: "SH".
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-MATCH_LEFT_AT_SIGN:
+MATCH_PREFIX_AT_SIGN:
 
         ; A '@' character in the rule being matched indicates any of the letters {D, J, L, N, R, S, T, Z} or a two-letter combination {TH, CH, SH}.
 
-        jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
+        jsr     GET_PREFIX_CHARACTER_PROPERTIES ;
         and     #$04                            ;
-        bne     GOOD_MATCH_LEFT_2               ; Match: {D, J, L, N, R, S, T, Z}.
+        bne     MATCH_PREFIX_SUCCESS_2          ; Match: {D, J, L, N, R, S, T, Z}.
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 @1:     cmp     #'T'                            ;
-        beq     GOOD_MATCH_LEFT_3               ; Match: "TH".
+        beq     MATCH_PREFIX_SUCCESS_3          ; Match: "TH".
         cmp     #'C'                            ;
-        beq     GOOD_MATCH_LEFT_3               ; Match: "CH".
+        beq     MATCH_PREFIX_SUCCESS_3          ; Match: "CH".
         cmp     #'S'                            ;
-        beq     GOOD_MATCH_LEFT_3               ; Match: "SH".
+        beq     MATCH_PREFIX_SUCCESS_3          ; Match: "SH".
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-GOOD_MATCH_LEFT_3:
+MATCH_PREFIX_SUCCESS_3:
 
-        stx     ZP_TEMP3                        ;
-        jmp     MATCH_LEFT_RULE_CHARACTER       ;
+        stx     ZP_RB_PREFIX_INDEX              ;
+        jmp     MATCH_PREFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_LEFT_CARET:
+MATCH_PREFIX_CARET:
 
-        ; A '^' character in the rule being matched indicates a consonant, i.e., any of:
+        ; A '^' character matches a consonant, i.e., any of:
         ;     {B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, W, X, Z}.
 
-        jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
+        jsr     GET_PREFIX_CHARACTER_PROPERTIES ;
         and     #$20                            ;
-        bne     GOOD_MATCH_LEFT_4               ; Match: consonant.
+        bne     MATCH_PREFIX_SUCCESS_4          ; Match: consonant.
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-GOOD_MATCH_LEFT_4:
+MATCH_PREFIX_SUCCESS_4:
 
-        stx     ZP_TEMP3                        ;
-        jmp     MATCH_LEFT_RULE_CHARACTER       ;
+        stx     ZP_RB_PREFIX_INDEX              ;
+        jmp     MATCH_PREFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_LEFT_PLUS:
+MATCH_PREFIX_PLUS:
 
-        ldx     ZP_TEMP3                        ;
+        ; A '+' character matches any of the letters {E, I, Y}.
+
+        ldx     ZP_RB_PREFIX_INDEX              ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'E'                            ;
-        beq     GOOD_MATCH_LEFT_4               ;
+        beq     MATCH_PREFIX_SUCCESS_4          ; Match: "E".
         cmp     #'I'                            ;
-        beq     GOOD_MATCH_LEFT_4               ;
+        beq     MATCH_PREFIX_SUCCESS_4          ; Match: "I".
         cmp     #'Y'                            ;
-        beq     GOOD_MATCH_LEFT_4               ;
-        jmp     TRY_NEXT_RULE                   ;
+        beq     MATCH_PREFIX_SUCCESS_4          ; Match: "Y".
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-MATCH_LEFT_COLON:
+MATCH_PREFIX_COLON:
 
-        jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
+        ; Match zero or more consonants.
+
+        jsr     GET_PREFIX_CHARACTER_PROPERTIES ;
         and     #$20                            ;
-        bne     @consonant                      ; consonant.
-        jmp     MATCH_LEFT_RULE_CHARACTER       ; non-consonant found: no match.
+        bne     @consonant                      ;
+        jmp     MATCH_PREFIX_CHARACTER          ;
 @consonant:
-        stx     ZP_TEMP3                        ;
-        jmp     MATCH_LEFT_COLON                ;
+        stx     ZP_RB_PREFIX_INDEX              ;
+        jmp     MATCH_PREFIX_COLON              ;
 
 ; ----------------------------------------------------------------------------
 
-GET_LEFT_CHARACTER_PROPERTIES:
+GET_PREFIX_CHARACTER_PROPERTIES:
 
-        ldx     ZP_TEMP3                        ;
+        ldx     ZP_RB_PREFIX_INDEX              ;
         dex                                     ;
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
@@ -669,9 +675,9 @@ GET_LEFT_CHARACTER_PROPERTIES:
 
 ; ----------------------------------------------------------------------------
 
-GET_RIGHT_CHARACTER_PROPERTIES:
+GET_SUFFIX_CHARACTER_PROPERTIES:
 
-        ldx     ZP_TEMP2                        ;
+        ldx     ZP_RB_SUFFIX_INDEX              ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         tay                                     ;
@@ -680,9 +686,9 @@ GET_RIGHT_CHARACTER_PROPERTIES:
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_PERCENT:
+MATCH_SUFFIX_PERCENT:
 
-        ldx     ZP_TEMP2                        ;
+        ldx     ZP_RB_SUFFIX_INDEX              ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'E'                            ;
@@ -693,34 +699,34 @@ MATCH_RIGHT_PERCENT:
         dex                                     ;
         lda     CHARACTER_PROPERTIES,y          ;
         and     #$80                            ;
-        beq     @GOOD_MATCH_RIGHT_1             ;
+        beq     @MATCH_SUFFIX_SUCCESS_1         ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'R'                            ;
-        bne     @MATCH_RIGHT_PERCENT_CONTINUE   ;
+        bne     @MATCH_SUFFIX_PERCENT_CONTINUE  ;
 
 ; ----------------------------------------------------------------------------
 
-@GOOD_MATCH_RIGHT_1:
+@MATCH_SUFFIX_SUCCESS_1:
 
-        stx     ZP_TEMP2                        ;
-        jmp     MATCH_RIGHT_RULE_CHARACTER      ;
+        stx     ZP_RB_SUFFIX_INDEX              ;
+        jmp     MATCH_SUFFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-@MATCH_RIGHT_PERCENT_CONTINUE:
+@MATCH_SUFFIX_PERCENT_CONTINUE:
 
         cmp     #'S'                            ;
-        beq     @GOOD_MATCH_RIGHT_1             ;
+        beq     @MATCH_SUFFIX_SUCCESS_1         ;
         cmp     #'D'                            ;
-        beq     @GOOD_MATCH_RIGHT_1             ;
+        beq     @MATCH_SUFFIX_SUCCESS_1         ;
         cmp     #'L'                            ;
         bne     @1                              ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'Y'                            ;
         bne     @3                              ;
-        beq     @GOOD_MATCH_RIGHT_1             ;
+        beq     @MATCH_SUFFIX_SUCCESS_1         ;
 @1:     cmp     #'F'                            ;
         bne     @3                              ;
         inx                                     ;
@@ -730,7 +736,7 @@ MATCH_RIGHT_PERCENT:
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'L'                            ;
-        beq     @GOOD_MATCH_RIGHT_1             ;
+        beq     @MATCH_SUFFIX_SUCCESS_1         ;
         bne     @3                              ;
 @2:     cmp     #'I'                            ;
         bne     @3                              ;
@@ -741,50 +747,50 @@ MATCH_RIGHT_PERCENT:
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'G'                            ;
-        beq     @GOOD_MATCH_RIGHT_1             ;
+        beq     @MATCH_SUFFIX_SUCCESS_1         ;
 @3:     jmp     TRY_NEXT_RULE                   ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_AFTER_RIGHT_PARENTHESIS:
+MATCH_SUFFIX:
 
-        lda     ZP_TEMP4                        ;
-        sta     ZP_TEMP2                        ;
+        lda     ZP_RB_LAST_CHAR_INDEX           ;
+        sta     ZP_RB_SUFFIX_INDEX              ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_RULE_CHARACTER:
+MATCH_SUFFIX_CHARACTER:
 
-        ldy     ZP_TEMP6                        ;
+        ldy     ZP_RULE_SUFFIX_INDEX                        ;
         iny                                     ;
-        cpy     ZP_TEMP5                        ; Compare to location of '=' character in rule.
+        cpy     ZP_TEMP2                        ; Compare to location of '=' character in rule.
         bne     @1                              ;
         jmp     APPLY_RULE                      ;
 
-@1:     sty     ZP_TEMP6                        ;
+@1:     sty     ZP_RULE_SUFFIX_INDEX            ;
         lda     (ZP_RULE_PTR),y                 ;
         sta     ZP_TEMP1                        ;
         tax                                     ;
         lda     CHARACTER_PROPERTIES,x          ;
         and     #$80                            ;
-        beq     MATCH_RIGHT_PLACEHOLDER         ;
-        ldx     ZP_TEMP2                        ;
+        beq     MATCH_SUFFIX_PLACEHOLDER        ;
+        ldx     ZP_RB_SUFFIX_INDEX              ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     ZP_TEMP1                        ;
-        beq     GOOD_MATCH_RIGHT_2              ;
+        beq     MATCH_SUFFIX_SUCCESS_2          ;
         jmp     TRY_NEXT_RULE                   ;
 
 ; ----------------------------------------------------------------------------
 
-GOOD_MATCH_RIGHT_2:
+MATCH_SUFFIX_SUCCESS_2:
 
-        stx     ZP_TEMP2                        ;
-        jmp     MATCH_RIGHT_RULE_CHARACTER      ;
+        stx     ZP_RB_SUFFIX_INDEX              ;
+        jmp     MATCH_SUFFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_PLACEHOLDER:
+MATCH_SUFFIX_PLACEHOLDER:
 
         ; Check for placeholder match of a pattern character to the right of the right parenthesis in the rule match-pattern.
 
@@ -792,38 +798,38 @@ MATCH_RIGHT_PLACEHOLDER:
 
         cmp     #' '                            ; Handle ' ' placeholder character.
         bne     @1                              ;
-        jmp     MATCH_RIGHT_SPACE               ;
+        jmp     MATCH_SUFFIX_SPACE              ;
 @1:     cmp     #'#'                            ; Handle '#' placeholder character.
         bne     @2                              ;
-        jmp     MATCH_RIGHT_HASH                ;
+        jmp     MATCH_SUFFIX_HASH               ;
 @2:     cmp     #'.'                            ; Handle '.' placeholder character.
         bne     @3                              ;
-        jmp     MATCH_RIGHT_PERIOD              ;
+        jmp     MATCH_SUFFIX_PERIOD             ;
 @3:     cmp     #'&'                            ; Handle '&' placeholder character.
         bne     @4                              ;
-        jmp     MATCH_RIGHT_AMPERSAND           ;
+        jmp     MATCH_SUFFIX_AMPERSAND          ;
 @4:     cmp     #'@'                            ; Handle '@' placeholder character.
         bne     @5                              ;
-        jmp     MATCH_RIGHT_AT_SIGN             ;
+        jmp     MATCH_SUFFIX_AT_SIGN            ;
 @5:     cmp     #'^'                            ; Handle '^' placeholder character.
         bne     @6                              ;
-        jmp     MATCH_RIGHT_CARET               ;
+        jmp     MATCH_SUFFIX_CARET              ;
 @6:     cmp     #'+'                            ; Handle '+' placeholder character.
         bne     @7                              ;
-        jmp     MATCH_RIGHT_PLUS                ;
+        jmp     MATCH_SUFFIX_PLUS               ;
 @7:     cmp     #':'                            ; Handle ':' placeholder character.
         bne     @8                              ;
-        jmp     MATCH_RIGHT_COLON               ;
+        jmp     MATCH_SUFFIX_COLON              ;
 @8:     cmp     #'%'                            ; Handle '%' placeholder character.
         bne     @9                              ;
-        jmp     MATCH_RIGHT_PERCENT             ;
+        jmp     MATCH_SUFFIX_PERCENT            ;
 
 @9:     jsr     SAM_ERROR_SOUND                 ; Any other character: signal error.
         brk                                     ; Abort.
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_SPACE:
+MATCH_SUFFIX_SPACE:
 
         ; A space character matches a small pause in the vocalisation -- a "space".
         ;
@@ -831,57 +837,57 @@ MATCH_RIGHT_SPACE:
         ; Single quotes are assumed to also imply that the character is preceded by a letter,
         ; e.g. "haven't" or "brother's".
 
-        jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
+        jsr     GET_SUFFIX_CHARACTER_PROPERTIES ;
         and     #$80                            ;
-        beq     GOOD_MATCH_RIGHT_3              ; Match: space.
+        beq     MATCH_SUFFIX_SUCCESS_3          ; Match: space.
         jmp     TRY_NEXT_RULE                   ; Mismatch: character is preceded by a letter or a single quote character.
 
 ; ----------------------------------------------------------------------------
 
-GOOD_MATCH_RIGHT_3:
+MATCH_SUFFIX_SUCCESS_3:
 
-        stx     ZP_TEMP2                        ;
-        jmp     MATCH_RIGHT_RULE_CHARACTER      ;
+        stx     ZP_RB_SUFFIX_INDEX              ;
+        jmp     MATCH_SUFFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_HASH:
+MATCH_SUFFIX_HASH:
 
         ; A '#' character in the rule matches a vowel, i.e., any of:
         ;     {A, E, I, O, U, Y}.
 
-        jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
+        jsr     GET_SUFFIX_CHARACTER_PROPERTIES ;
         and     #$40                            ;
-        bne     GOOD_MATCH_RIGHT_3              ; Match: vowel.
+        bne     MATCH_SUFFIX_SUCCESS_3          ; Match: vowel.
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_PERIOD:
+MATCH_SUFFIX_PERIOD:
 
         ; A '.' character in the rule matches any of the letters {B, D, G, J, L, M, N, R, V, W, Z}.
 
-        jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
+        jsr     GET_SUFFIX_CHARACTER_PROPERTIES ;
         and     #$08                            ;
-        bne     GOOD_MATCH_RIGHT_4              ; Match: {B, D, G, J, L, M, N, R, V, W, Z}.
+        bne     MATCH_SUFFIX_SUCCESS_4          ; Match: {B, D, G, J, L, M, N, R, V, W, Z}.
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-GOOD_MATCH_RIGHT_4:
+MATCH_SUFFIX_SUCCESS_4:
 
-        stx     ZP_TEMP2                        ;
-        jmp     MATCH_RIGHT_RULE_CHARACTER      ;
+        stx     ZP_RB_SUFFIX_INDEX              ;
+        jmp     MATCH_SUFFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_AMPERSAND:
+MATCH_SUFFIX_AMPERSAND:
 
         ; A '&' character in the rule matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
 
-        jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
+        jsr     GET_SUFFIX_CHARACTER_PROPERTIES ;
         and     #$10                            ;
-        bne     GOOD_MATCH_RIGHT_4              ; Match: {C, G, J, S, X, Z}.
+        bne     MATCH_SUFFIX_SUCCESS_4          ; Match: {C, G, J, S, X, Z}.
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
@@ -890,82 +896,89 @@ MATCH_RIGHT_AMPERSAND:
 @1:     inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'C'                            ;
-        beq     GOOD_MATCH_RIGHT_4              ; Match: "CH".
+        beq     MATCH_SUFFIX_SUCCESS_4          ; Match: "CH".
         cmp     #'S'                            ;
-        beq     GOOD_MATCH_RIGHT_4              ; Match: "SH".
+        beq     MATCH_SUFFIX_SUCCESS_4          ; Match: "SH".
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_AT_SIGN:
+MATCH_SUFFIX_AT_SIGN:
 
         ; A '@' character in a rule matches any of the letters {D, J, L, N, R, S, T, Z} or a two-letter combination {TH, CH, SH}.
 
-        jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
+        jsr     GET_SUFFIX_CHARACTER_PROPERTIES ;
         and     #$04                            ;
-        bne     GOOD_MATCH_RIGHT_4              ; Match: {D, J, L, N, R, S, T, Z}.
+        bne     MATCH_SUFFIX_SUCCESS_4          ; Match: {D, J, L, N, R, S, T, Z}.
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 @1:     cmp     #'T'                            ;
-        beq     GOOD_MATCH_RIGHT_5              ; Match: "TH".
+        beq     MATCH_SUFFIX_SUCCESS_5          ; Match: "TH".
         cmp     #'C'                            ;
-        beq     GOOD_MATCH_RIGHT_5              ; Match: "CH".
+        beq     MATCH_SUFFIX_SUCCESS_5          ; Match: "CH".
         cmp     #'S'                            ;
-        beq     GOOD_MATCH_RIGHT_5              ; Match: "SH".
+        beq     MATCH_SUFFIX_SUCCESS_5          ; Match: "SH".
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-GOOD_MATCH_RIGHT_5:
+MATCH_SUFFIX_SUCCESS_5:
 
-        stx     ZP_TEMP2                        ;
-        jmp     MATCH_RIGHT_RULE_CHARACTER      ;
+        stx     ZP_RB_SUFFIX_INDEX              ;
+        jmp     MATCH_SUFFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_CARET:
+MATCH_SUFFIX_CARET:
 
-        jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
+        ; A '^' character matches a consonant, i.e., any of:
+        ;     {B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, W, X, Z}.
+
+        jsr     GET_SUFFIX_CHARACTER_PROPERTIES ;
         and     #$20                            ;
-        bne     GOOD_MATCH_RIGHT_6              ; consonant.
-        jmp     TRY_NEXT_RULE                   ; non-consonant.
+        bne     MATCH_SUFFIX_SUCCESS_6          ; Match: consonant.
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-GOOD_MATCH_RIGHT_6:
+MATCH_SUFFIX_SUCCESS_6:
 
-        stx     ZP_TEMP2                        ;
-        jmp     MATCH_RIGHT_RULE_CHARACTER      ;
+        stx     ZP_RB_SUFFIX_INDEX              ;
+        jmp     MATCH_SUFFIX_CHARACTER          ;
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_PLUS:
+MATCH_SUFFIX_PLUS:
 
-        ldx     ZP_TEMP2                        ;
+        ; A '+' character matches any of the letters {E, I, Y}.
+
+        ldx     ZP_RB_SUFFIX_INDEX              ;
         inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'E'                            ;
-        beq     GOOD_MATCH_RIGHT_6              ;
+        beq     MATCH_SUFFIX_SUCCESS_6          ; Match "E".
         cmp     #'I'                            ;
-        beq     GOOD_MATCH_RIGHT_6              ;
+        beq     MATCH_SUFFIX_SUCCESS_6          ; Match "I".
         cmp     #'Y'                            ;
-        beq     GOOD_MATCH_RIGHT_6              ;
-        jmp     TRY_NEXT_RULE                   ;
+        beq     MATCH_SUFFIX_SUCCESS_6          ; Match "Y".
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
-MATCH_RIGHT_COLON:
+MATCH_SUFFIX_COLON:
 
-        jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
+        ; Match zero or more consonants.
+
+        jsr     GET_SUFFIX_CHARACTER_PROPERTIES ;
         and     #$20                            ;
         bne     @consonant                      ; consonant.
-        jmp     MATCH_RIGHT_RULE_CHARACTER      ; non-consonant.
+        jmp     MATCH_SUFFIX_CHARACTER          ; non-consonant.
 @consonant:
-        stx     ZP_TEMP2                        ;
-        jmp     MATCH_RIGHT_COLON               ;
+        stx     ZP_RB_SUFFIX_INDEX              ;
+        jmp     MATCH_SUFFIX_COLON              ;
 
 ; ----------------------------------------------------------------------------
 
@@ -973,8 +986,8 @@ APPLY_RULE:
 
         ; The rule fully matches; perform the translation.
 
-        ldy     ZP_TEMP5                        ; Location of '=' character.
-        lda     ZP_TEMP4                        ;
+        ldy     ZP_TEMP2                        ; Location of '=' character.
+        lda     ZP_RB_LAST_CHAR_INDEX           ;
         sta     ZP_RECITER_BUFFER_INDEX         ; Update ZP_RECITER_BUFFER_INDEX.
 @1:     lda     (ZP_RULE_PTR),y                 ;
         sta     ZP_TEMP1                        ;
@@ -986,6 +999,7 @@ APPLY_RULE:
         sta     SAM_BUFFER,x                    ;
 @2:     bit     ZP_TEMP1                        ;
         bpl     @3                              ;
+
         jmp     TRANSLATE_NEXT_CHARACTER        ;
 
 @3:     iny                                     ;

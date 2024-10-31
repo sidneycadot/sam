@@ -24,6 +24,10 @@
 
         .export BASIC  := $A000          ; BASIC entry point.
 
+; CTIA / GTIA (0xD000 .. 0xD01F)
+
+        .export CONSOL := $D01F         ; Speaker click.
+
 ; POKEY (0xD200..0xD20F)
 
         .export AUDC1 := $D201          ; Audio Channel #1 control.
