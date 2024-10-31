@@ -82,8 +82,8 @@ CHARACTER_PROPERTIES:
         ; Value 0x00: ignore the character
         ; bit 0 (%00000001): 0-9                                                  (digits)
         ; bit 1 (%00000010): ! " # $ % & ' * + , - . 0-9 : ; < = > ? @ ^          (special characters and digits)
-        ; bit 2 (%00000100):       D           J L     N       R S T           Z
-        ; bit 3 (%00001000):   B   D     G     J L M   N       R       V W     Z
+        ; bit 2 (%00000100):       D           J   L   N       R S T           Z
+        ; bit 3 (%00001000):   B   D     G     J   L M N       R       V W     Z
         ; bit 4 (%00010000):     C       G     J                 S         X   Z
         ; bit 5 (%00100000):   B C D   F G H   J K L M N   P Q R S T   V W X   Z  (consonants)
         ; bit 6 (%01000000): A       E       I           O           U       Y    (vowels)
@@ -511,8 +511,7 @@ MATCH_LEFT_PLACEHOLDER:
 
 MATCH_LEFT_SPACE:
 
-        ; A space character in the rule being matched indicates that there is a
-        ; small pause in the vocalisation -- a "space".
+        ; A space character in a rule matches a small pause in the vocalisation -- a "space".
         ;
         ; Any character that is not A-Z or a single quote matches this.
         ; Single quotes are assumed to also imply that the character is preceded by a letter,
@@ -534,21 +533,24 @@ GOOD_MATCH_LEFT_1:
 
 MATCH_LEFT_HASH:
 
-        ; A '#' character in the rule being matched indicates any single vowel (A, E, I, O, U, Y).
+        ; A '#' character in a rule matches a vowel, i.e., any of:
+        ;     {A, E, I, O, U, Y}.
 
         jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
         and     #$40                            ;
         bne     GOOD_MATCH_LEFT_1               ; Match: vowel.
-        jmp     TRY_NEXT_RULE                   ; Mismatch: non-vowel.
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
 MATCH_LEFT_PERIOD:
 
+        ; A '.' character in the rule being matched indicates any of the letters {B, D, G, J, L, M, N, R, V, W, Z}.
+
         jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
         and     #$08                            ;
-        bne     GOOD_MATCH_LEFT_2               ;
-        jmp     TRY_NEXT_RULE                   ;
+        bne     GOOD_MATCH_LEFT_2               ; Match: {B, D, G, J, L, M, N, R, V, W, Z}.
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
@@ -561,41 +563,45 @@ GOOD_MATCH_LEFT_2:
 
 MATCH_LEFT_AMPERSAND:
 
+        ; A '&' character in the rule being matched indicates any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
+
         jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
         and     #$10                            ;
-        bne     GOOD_MATCH_LEFT_2               ;
+        bne     GOOD_MATCH_LEFT_2               ; Match: {C, G, J, S, X, Z}.
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
-        jmp     TRY_NEXT_RULE                   ;
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 @1:     dex                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'C'                            ;
-        beq     GOOD_MATCH_LEFT_2               ;
+        beq     GOOD_MATCH_LEFT_2               ; Match: "CH".
         cmp     #'S'                            ;
-        beq     GOOD_MATCH_LEFT_2               ;
-        jmp     TRY_NEXT_RULE                   ;
+        beq     GOOD_MATCH_LEFT_2               ; Match: "SH".
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
 MATCH_LEFT_AT_SIGN:
 
+        ; A '@' character in the rule being matched indicates any of the letters {D, J, L, N, R, S, T, Z} or a two-letter combination {TH, CH, SH}.
+
         jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
         and     #$04                            ;
-        bne     GOOD_MATCH_LEFT_2               ;
+        bne     GOOD_MATCH_LEFT_2               ; Match: {D, J, L, N, R, S, T, Z}.
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
-        jmp     TRY_NEXT_RULE                   ;
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 @1:     cmp     #'T'                            ;
-        beq     GOOD_MATCH_LEFT_3               ;
+        beq     GOOD_MATCH_LEFT_3               ; Match: "TH".
         cmp     #'C'                            ;
-        beq     GOOD_MATCH_LEFT_3               ;
+        beq     GOOD_MATCH_LEFT_3               ; Match: "CH".
         cmp     #'S'                            ;
-        beq     GOOD_MATCH_LEFT_3               ;
-        jmp     TRY_NEXT_RULE                   ;
+        beq     GOOD_MATCH_LEFT_3               ; Match: "SH".
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
@@ -608,10 +614,13 @@ GOOD_MATCH_LEFT_3:
 
 MATCH_LEFT_CARET:
 
+        ; A '^' character in the rule being matched indicates a consonant, i.e., any of:
+        ;     {B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, W, X, Z}.
+
         jsr     GET_LEFT_CHARACTER_PROPERTIES   ;
         and     #$20                            ;
-        bne     GOOD_MATCH_LEFT_4               ; consonant.
-        jmp     TRY_NEXT_RULE                   ; non-consonant.
+        bne     GOOD_MATCH_LEFT_4               ; Match: consonant.
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
@@ -816,8 +825,7 @@ MATCH_RIGHT_PLACEHOLDER:
 
 MATCH_RIGHT_SPACE:
 
-        ; A space character in the rule being matched indicates that there is a
-        ; small pause in the vocalisation -- a "space".
+        ; A space character matches a small pause in the vocalisation -- a "space".
         ;
         ; Any character that is not A-Z or a single quote matches this.
         ; Single quotes are assumed to also imply that the character is preceded by a letter,
@@ -839,21 +847,24 @@ GOOD_MATCH_RIGHT_3:
 
 MATCH_RIGHT_HASH:
 
-        ; A '#' character in the rule being matched indicates any single vowel (A, E, I, O, U, Y).
+        ; A '#' character in the rule matches a vowel, i.e., any of:
+        ;     {A, E, I, O, U, Y}.
 
         jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
         and     #$40                            ;
-        bne     GOOD_MATCH_RIGHT_3              ; Match: vowel
-        jmp     TRY_NEXT_RULE                   ; Mismatch: non-vowel
+        bne     GOOD_MATCH_RIGHT_3              ; Match: vowel.
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
 MATCH_RIGHT_PERIOD:
 
+        ; A '.' character in the rule matches any of the letters {B, D, G, J, L, M, N, R, V, W, Z}.
+
         jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
         and     #$08                            ;
-        bne     GOOD_MATCH_RIGHT_4              ;
-        jmp     TRY_NEXT_RULE                   ;
+        bne     GOOD_MATCH_RIGHT_4              ; Match: {B, D, G, J, L, M, N, R, V, W, Z}.
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
@@ -866,9 +877,11 @@ GOOD_MATCH_RIGHT_4:
 
 MATCH_RIGHT_AMPERSAND:
 
+        ; A '&' character in the rule matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
+
         jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
         and     #$10                            ;
-        bne     GOOD_MATCH_RIGHT_4              ;
+        bne     GOOD_MATCH_RIGHT_4              ; Match: {C, G, J, S, X, Z}.
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
@@ -877,30 +890,32 @@ MATCH_RIGHT_AMPERSAND:
 @1:     inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'C'                            ;
-        beq     GOOD_MATCH_RIGHT_4              ;
+        beq     GOOD_MATCH_RIGHT_4              ; Match: "CH".
         cmp     #'S'                            ;
-        beq     GOOD_MATCH_RIGHT_4              ;
-        jmp     TRY_NEXT_RULE                   ;
+        beq     GOOD_MATCH_RIGHT_4              ; Match: "SH".
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
 MATCH_RIGHT_AT_SIGN:
 
+        ; A '@' character in a rule matches any of the letters {D, J, L, N, R, S, T, Z} or a two-letter combination {TH, CH, SH}.
+
         jsr     GET_RIGHT_CHARACTER_PROPERTIES  ;
         and     #$04                            ;
-        bne     GOOD_MATCH_RIGHT_4              ;
+        bne     GOOD_MATCH_RIGHT_4              ; Match: {D, J, L, N, R, S, T, Z}.
         lda     RECITER_BUFFER,x                ;
         cmp     #'H'                            ;
         beq     @1                              ;
-        jmp     TRY_NEXT_RULE                   ;
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 @1:     cmp     #'T'                            ;
-        beq     GOOD_MATCH_RIGHT_5              ;
+        beq     GOOD_MATCH_RIGHT_5              ; Match: "TH".
         cmp     #'C'                            ;
-        beq     GOOD_MATCH_RIGHT_5              ;
+        beq     GOOD_MATCH_RIGHT_5              ; Match: "CH".
         cmp     #'S'                            ;
-        beq     GOOD_MATCH_RIGHT_5              ;
-        jmp     TRY_NEXT_RULE                   ;
+        beq     GOOD_MATCH_RIGHT_5              ; Match: "SH".
+        jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
