@@ -69,7 +69,7 @@ SAM_RUN_SAM_FROM_BASIC:
 
 ; ----------------------------------------------------------------------------
 
-        ; SAM entry point from machine code (address 0x2005).
+        ; SAM entry point from machine code (address 0x2004).
         ; The phonemes are assumed to be in the SAM_BUFFER.
 
 SAM_RUN_SAM_FROM_MACHINE_CODE:
@@ -78,7 +78,7 @@ SAM_RUN_SAM_FROM_MACHINE_CODE:
 
 ; ----------------------------------------------------------------------------
 
-        ; Reciter entry point from BASIC (address 8200).
+        ; Reciter entry point from BASIC (address 8199).
         ; SAM$ is assumed to contain a string holding English text.
 
 SAM_RUN_RECITER_FROM_BASIC:
@@ -97,11 +97,11 @@ SAM_RUN_RECITER_FROM_MACHINE_CODE:
 
 ; ----------------------------------------------------------------------------
 
-D200E:  .byte   $41                             ;
-D200F:  .byte   $40                             ;
-D2010:  .byte   $46                             ;
-D2011:  .byte   $40                             ;
-D2012:  .byte   $00                             ;
+D200E:  .byte   $41                             ; Mode #1 self-modifying code initializer.
+D200F:  .byte   $40                             ; Mode #1 self-modifying code initializer.
+D2010:  .byte   $46                             ; Mode #0 self-modifying code initializer.
+D2011:  .byte   $40                             ; Mode #0 self-modifying code initializer.
+MODE:   .byte   $00                             ; 0 = regular, 1 = dubug (?)
 D2013:  .byte   $FF                             ;
 
 ; ----------------------------------------------------------------------------
@@ -120,8 +120,8 @@ RUN_SAM_FROM_BASIC:             ; Entry point from BASIC (after PLA).
 
         jsr     SAM_COPY_BASIC_SAM_STRING       ; Find and copy SAM$.
         lda     $CB                             ; Is result zero (good?)
-        beq     RUN_SAM_FROM_MACHINE_CODE       ; Yes! Play the phonemes.
-        rts                                     ; Return to BASIC.
+        beq     RUN_SAM_FROM_MACHINE_CODE       ; Yes: play the phonemes.
+        rts                                     ; No: return to BASIC.
 
 ; ----------------------------------------------------------------------------
 
@@ -131,7 +131,7 @@ RUN_SAM_FROM_MACHINE_CODE:
 
 ; ----------------------------------------------------------------------------
 
-SAM_SAY_PHONEMES:                               ; Note: entry point for the reciter.
+SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER as sound.
 
         lda     #$FF                            ;
         sta     D2013                           ;
@@ -149,10 +149,10 @@ SAM_SAY_PHONEMES:                               ; Note: entry point for the reci
         sta     NMIEN                           ; Disable NMI interrupts.
         sta     IRQEN                           ; Disable IRQ interrupts.
 
-        lda     D2012                           ; Select Codepath #1 or Codepath #2.
-        beq     @1                              ;
+        lda     MODE                            ; Select mode #0 (normal) or mode #1 (debug?)
+        beq     @mode0                          ;
 
-        lda     #1                              ; Codepath #1: Initialize self-modifying code values.
+        lda     #1                              ; Mode #1: Initialize self-modifying code values.
         sta     SMC42DF                         ;
         sta     SMC4210                         ;
         sta     SMC42B0                         ;
@@ -160,13 +160,11 @@ SAM_SAY_PHONEMES:                               ; Note: entry point for the reci
         sta     SMC403F                         ;
         lda     D200E                           ;
         sta     SMC421F                         ;
+        jmp     @join                           ;
 
-        jmp     @2                              ;
-
-@1:     lda     #0                              ; Codepath #2
+@mode0: lda     #0                              ; Mode #0
         sta     DMACTL                          ; Disable DMA (Antic)
-
-        lda     #$10                            ; Update self-modifying code values.
+        lda     #$10                            ; Initialize self-modifying code values.
         sta     SMC4210                         ;
         lda     #$0D                            ;
         sta     SMC42B0                         ;
@@ -177,19 +175,21 @@ SAM_SAY_PHONEMES:                               ; Note: entry point for the reci
         lda     D2010                           ;
         sta     SMC421F                         ;
 
-@2:     lda     D2262,x                         ;
+@join:  lda     D2262,x                         ;
         cmp     #$50                            ;
         bcs     @3                              ;
         inx                                     ;
-        bne     @2                              ;
+        bne     @join                           ;
         beq     @4                              ;
 @3:     lda     #$FF                            ;
         sta     D2262,x                         ;
+
 @4:     jsr     SUB_4336                        ;
         lda     #$FF                            ;
         sta     D2360                           ;
         jsr     SUB_43AA                        ;
-        ldx     #$00                            ;
+
+        ldx     #0                              ; All done. Should we restore the DMA and interrupt state?
         cpx     $CD                             ;
         stx     $CD                             ;
         beq     @5                              ;
@@ -429,28 +429,10 @@ D2462:  .byte   $04,$03,$00,$00,$00,$00,$00,$00 ; 2462 04 03 00 00 00 00 00 00  
 
 D2562:  .byte   $2A,$31,$32,$33,$34,$35,$36,$37 ; 2562 2A 31 32 33 34 35 36 37  *1234567
         .byte   $38,$39                         ; 256A 38 39                    89
-D256C:  .byte   $20,$2E,$3F,$2C,$2D,$49,$49,$45 ; 256C 20 2E 3F 2C 2D 49 49 45   .?,-IIE
-        .byte   $41,$41,$41,$41,$55,$41,$49,$45 ; 2574 41 41 41 41 55 41 49 45  AAAAUAIE
-        .byte   $55,$4F,$52,$4C,$57,$59,$57,$52 ; 257C 55 4F 52 4C 57 59 57 52  UORLWYWR
-        .byte   $4C,$57,$59,$4D,$4E,$4E,$44,$51 ; 2584 4C 57 59 4D 4E 4E 44 51  LWYMNNDQ
-        .byte   $53,$53,$46,$54,$2F,$2F,$5A,$5A ; 258C 53 53 46 54 2F 2F 5A 5A  SSFT//ZZ
-        .byte   $56,$44,$43,$2A,$4A,$2A,$2A,$2A ; 2594 56 44 43 2A 4A 2A 2A 2A  VDC*J***
-        .byte   $45,$41,$4F,$41,$4F,$55,$42,$2A ; 259C 45 41 4F 41 4F 55 42 2A  EAOAOUB*
-        .byte   $2A,$44,$2A,$2A,$47,$2A,$2A,$47 ; 25A4 2A 44 2A 2A 47 2A 2A 47  *D**G**G
-        .byte   $2A,$2A,$50,$2A,$2A,$54,$2A,$2A ; 25AC 2A 2A 50 2A 2A 54 2A 2A  **P**T**
-        .byte   $4B,$2A,$2A,$4B,$2A,$2A,$55,$55 ; 25B4 4B 2A 2A 4B 2A 2A 55 55  K**K**UU
-        .byte   $55                             ; 25BC 55                       U
-D25BD:  .byte   $2A,$2A,$2A,$2A,$2A,$59,$48,$48 ; 25BD 2A 2A 2A 2A 2A 59 48 48  *****YHH
-        .byte   $45,$41,$48,$4F,$48,$58,$58,$52 ; 25C5 45 41 48 4F 48 58 58 52  EAHOHXXR
-        .byte   $58,$48,$58,$58,$58,$58,$48,$2A ; 25CD 58 48 58 58 58 58 48 2A  XHXXXXH*
-        .byte   $2A,$2A,$2A,$2A,$2A,$58,$58,$2A ; 25D5 2A 2A 2A 2A 2A 58 58 2A  *****XX*
-        .byte   $2A,$48,$2A,$48,$48,$58,$2A,$48 ; 25DD 2A 48 2A 48 48 58 2A 48  *H*HHX*H
-        .byte   $2A,$48,$48,$2A,$2A,$2A,$2A,$2A ; 25E5 2A 48 48 2A 2A 2A 2A 2A  *HH*****
-        .byte   $59,$59,$59,$57,$57,$57,$2A,$2A ; 25ED 59 59 59 57 57 57 2A 2A  YYYWWW**
-        .byte   $2A,$2A,$2A,$2A,$2A,$2A,$2A,$58 ; 25F5 2A 2A 2A 2A 2A 2A 2A 58  *******X
-        .byte   $2A,$2A,$2A,$2A,$2A,$2A,$2A,$2A ; 25FD 2A 2A 2A 2A 2A 2A 2A 2A  ********
-        .byte   $2A,$2A,$2A,$58,$2A,$2A,$4C,$4D ; 2605 2A 2A 2A 58 2A 2A 4C 4D  ***X**LM
-        .byte   $4E                             ; 260D 4E                       N
+
+PHONEMES_1ST:  .byte   " .?,-IIEAAAAUAIEUORLWYWRLWYMNNDQSSFT//ZZVDC*J***EAOAOUB**D**G**G**P**T**K**K**UUU"
+PHONEMES_2ND:  .byte   "*****YHHEAHOHXXRXHXXXXH******XX**H*HHX*H*HH*****YYYWWW*********X***********X**LMN"
+
 D260E:  .byte   $00,$00,$00,$00,$00,$A4,$A4,$A4 ; 260E 00 00 00 00 00 A4 A4 A4  ........
         .byte   $A4,$A4,$A4,$84,$84,$A4,$A4,$84 ; 2616 A4 A4 A4 84 84 A4 A4 84  ........
         .byte   $84,$84,$84,$84,$84,$84,$44,$44 ; 261E 84 84 84 84 84 84 44 44  ......DD
@@ -494,7 +476,7 @@ SUB_26B1:
 
 SUB_26B8:
 
-        jsr     SUB_26AA                         ;
+        jsr     SUB_26AA                        ;
         ldx     #$FF                            ;
         ldy     #$00                            ;
 @1:     dex                                     ;
@@ -520,59 +502,73 @@ SUB_26B8:
 
 SUB_26EA:                                       ; Called by SAM_SAY_PHONEMES.
 
-        ldx     #0                              ;
+        ldx     #0                              ; Initialize A, X, Y registers to zero.
         txa                                     ;
         tay                                     ;
-        sta     $FF                             ;
-@1:     sta     D2462,y                         ;
+
+        sta     $FF                             ; Set $FF to 0.
+
+@init:  sta     D2462,y                         ; Initialize first 255 bytes of D4262 buffer to zero.
         iny                                     ;
         cpy     #$FF                            ;
-        bne     @1                              ;
-@2:     lda     SAM_BUFFER,x                    ;
+        bne     @init                           ;
+
+@next_phoneme:
+
+        lda     SAM_BUFFER,x                    ; Are we seeing the end of the SAM_BUFFER?
         cmp     #$9B                            ;
         beq     @13                             ;
-        sta     $FE                             ;
+
+        sta     $FE                             ; Copy 2-byte phoneme to $FE,$FD.
         inx                                     ;
         lda     SAM_BUFFER,x                    ;
         sta     $FD                             ;
-        ldy     #$00                            ;
-@3:     lda     D256C,y                         ;
+
+        ldy     #0                              ; Search phoneme tables.
+@3:     lda     PHONEMES_1ST,y                  ;
         cmp     $FE                             ;
         bne     @4                              ;
-        lda     D25BD,y                         ;
-        cmp     #$2A                            ;
+        lda     PHONEMES_2ND,y                  ;
+        cmp     #'*'                            ;
         beq     @4                              ;
         cmp     $FD                             ;
-        beq     @5                              ;
+        beq     @found_phoneme                  ; Found phoneme match.
+
 @4:     iny                                     ;
-        cpy     #$51                            ;
-        bne     @3                              ;
-        beq     @6                              ;
-@5:     tya                                     ;
+        cpy     #81                             ; End of ASCII phoneme table?
+        bne     @3                              ; Try next phoneme.
+        beq     @phoneme_not_found              ; Oops, phoneme not found.
+
+@found_phoneme:
+
+        tya                                     ; Save phoneme into D2262 phoneme byte table.
         ldy     $FF                             ;
         sta     D2262,y                         ;
         inc     $FF                             ;
         inx                                     ;
-        jmp     @2                              ;
+        jmp     @next_phoneme                   ; Process next phoneme.
 
-@6:     ldy     #$00                            ;
-@7:     lda     D25BD,y                         ;
-        cmp     #$2A                            ;
+@phoneme_not_found:
+
+        ldy     #0                              ;
+@7:     lda     PHONEMES_2ND,y                  ;
+        cmp     #'*'                            ;
         bne     @8                              ;
-        lda     D256C,y                         ;
+        lda     PHONEMES_1ST,y                  ;
         cmp     $FE                             ;
         beq     @9                              ;
 @8:     iny                                     ;
-        cpy     #$51                            ;
+        cpy     #81                             ;
         bne     @7                              ;
         beq     @10                             ;
-@9:     tya                                     ;
+
+@9:     tya                                     ; Found.
         ldy     $FF                             ;
         sta     D2262,y                         ;
         inc     $FF                             ;
-        jmp     @2                              ;
+        jmp     @next_phoneme                   ;
 
-@10:    lda     $FE                             ;
+@10:    lda     $FE                             ; Not found.
         ldy     #8                              ;
 @11:    cmp     D2562,y                         ;
         beq     @12                             ;
@@ -586,9 +582,9 @@ SUB_26EA:                                       ; Called by SAM_SAY_PHONEMES.
         ldy     $FF                             ;
         dey                                     ;
         sta     D2462,y                         ;
-        jmp     @2                              ;
+        jmp     @next_phoneme                   ;
 
-@13:    lda     #$FF                            ;
+@13:    lda     #$FF                            ; Set D2262+$FF buffer to 255.
         ldy     $FF                             ;
         sta     D2262,y                         ;
         rts                                     ;
