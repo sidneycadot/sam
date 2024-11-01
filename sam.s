@@ -1,9 +1,4 @@
 
-; Source code for SAM, the Software Automatic Mouth (Atari 8-bit version).
-;
-; The "SAM" program renders phonetic text to sound.
-; It can also call into the companion "reciter" program to first render English text to phonemes.
-
 ; ----------------------------------------------------------------------------
 
         .setcpu "6502"
@@ -34,9 +29,11 @@
 ; ----------------------------------------------------------------------------
 
         .import RECITER_VIA_SAM_FROM_BASIC
-        .import RECITER_VIA_SAM_FROM_MACHINE_CODE
+        .import RECITER_VIA_SAM_FROM_MACHINE_LANGUAGE
 
 ; ----------------------------------------------------------------------------
+
+        .exportzp SAM_ZP_CD
 
         .export SAM_BUFFER                      ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
         .export SAM_SAY_PHONEMES                ; Play the phonemes in SAM_BUFFER as sound.
@@ -60,13 +57,29 @@
 
 ; ----------------------------------------------------------------------------
 
-ZP_CB := $CB                                    ;
-ZP_CC := $CC                                    ;
-ZP_CD := $CD                                    ;
-ZP_CE := $CE                                    ;
-ZP_CF := $CF                                    ;
-ZP_D0 := $D0                                    ;
-ZP_D1 := $D1                                    ;
+; Note: addresses $CB and $CC are used for two things:
+
+ZP_CB_PTR := $CB                                ; Used in "SAM_COPY_BASIC_SAM_STRING" as a cariable index counter,
+ZP_CB_PTR_LO := $CB                             ; then as a pointer into the Atari BASIC variable value table.
+ZP_CB_PTR_HI := $CC                             ;
+
+ZP_CB_SAM_STRING_RESULT := $CB                  ; Secondary usage: result code from ZP_CB_SAM_STRING_FOUND.
+ZP_CC_TEMP := $CC                               ; Secondary usage: counter in SAM_ERROR_SOUND.
+
+; Address $CD is used as a temporary variable in SAM_COPY_BASIC_SAM_STRING to hold the size of the string copied
+; from SAM$ into SAM_BUFFER.
+;
+; TODO: document/figure out its use outside of SAM_COPY_BASIC_SAM_STRING.
+
+SAM_ZP_CD := $CD                                ; TODO
+
+ZP_CE_PTR    := $CE                             ; Exclusively used in "SAM_COPY_BASIC_SAM_STRING" as a pointer into
+ZP_CE_PTR_LO := $CE                             ; the Atari BASIC variable name table while looking for SAM$.
+ZP_CE_PTR_HI := $CF                             ;
+
+ZP_D0_PTR := $D0                                ; Exclusively used in "SAM_COPY_BASIC_SAM_STRING" as a to
+ZP_D0_PTR_LO := $D0                             ; the content of SAM$.
+ZP_D0_PTR_HI := $D1                             ;
 
 ZP_E0 := $E0                                    ;
 ZP_E1 := $E1                                    ;
@@ -79,8 +92,17 @@ ZP_E7 := $E7                                    ;
 ZP_E8 := $E8                                    ;
 ZP_E9 := $E9                                    ;
 ZP_EA := $EA                                    ;
-ZP_EB := $EB                                    ;
-ZP_EC := $EC                                    ;
+
+;
+;
+;
+
+ZP_EB_PTR := $EB                                ;
+ZP_EB_PTR_LO := $EB                             ;
+ZP_EB_PTR_HI := $EC                             ;
+
+;
+
 ZP_ED := $ED                                    ;
 ZP_EE := $EE                                    ;
 ZP_EF := $EF                                    ;
@@ -115,12 +137,12 @@ SAM_RUN_SAM_FROM_BASIC:
 
 ; ----------------------------------------------------------------------------
 
-        ; SAM entry point from machine code (address 0x2004).
+        ; SAM entry point from machine code (address $2004).
         ; The phonemes are assumed to be in the SAM_BUFFER.
 
-SAM_RUN_SAM_FROM_MACHINE_CODE:
+SAM_RUN_SAM_FROM_MACHINE_LANGUAGE:
 
-        jmp     RUN_SAM_FROM_MACHINE_CODE       ;
+        jmp     RUN_SAM_FROM_MACHINE_LANGUAGE   ;
 
 ; ----------------------------------------------------------------------------
 
@@ -134,26 +156,27 @@ SAM_RUN_RECITER_FROM_BASIC:
 
 ; ----------------------------------------------------------------------------
 
-SAM_RUN_RECITER_FROM_MACHINE_CODE:
+SAM_RUN_RECITER_FROM_MACHINE_LANGUAGE:
 
-        ; Reciter entry point from machine code (address 0x200d).
+        ; Reciter entry point from machine code (address $200B).
         ; The English text is assumed to be in the SAM_BUFFER.
 
-        jmp     RECITER_VIA_SAM_FROM_MACHINE_CODE
+        jmp     RECITER_VIA_SAM_FROM_MACHINE_LANGUAGE
 
 ; ----------------------------------------------------------------------------
 
-D200E:  .byte   $41                             ; Mode #1 self-modifying code initializer.
-D200F:  .byte   $40                             ; Mode #1 self-modifying code initializer.
-D2010:  .byte   $46                             ; Mode #0 self-modifying code initializer.
-D2011:  .byte   $40                             ; Mode #0 self-modifying code initializer.
-MODE:   .byte   $00                             ; Mode 0 = regular, Mode 1 = debug (?)
-D2013:  .byte   $FF                             ;
+SPEED_L1:       .byte   $41                     ; Lights-on  speed value(self-modifying code value).
+PITCH_L1:       .byte   $40                     ; Lights-on  pitch value (self-modifying code value).
+SPEED_L0:       .byte   $46                     ; Lights-off speed value (self-modifying code value).
+PITCH_L0:       .byte   $40                     ; Lights-off pitch value(self-modifying code value).
+LIGHTS:         .byte   0                       ; Lights 0 = video off (default), Lights 1 = video on.
+ERROR:          .byte   $FF                     ;
 
 ; ----------------------------------------------------------------------------
 
         ; This is the 256-byte input buffer for SAM. It is pre-loaded with a small phonetic greeting:
-        ; "Hello, my name is Sam. I am a speech synthesizer on a disk."
+        ;
+        ;     "Hello, my name is Sam. I am a speech synthesizer on a disk."
 
 SAM_BUFFER:
 
@@ -162,27 +185,33 @@ SAM_BUFFER:
 
 ; ----------------------------------------------------------------------------
 
-RUN_SAM_FROM_BASIC:             ; Entry point from BASIC (after PLA).
+RUN_SAM_FROM_BASIC:                             ; Entry point from BASIC (after PLA).
 
-        jsr     SAM_COPY_BASIC_SAM_STRING       ; Find and copy SAM$.
-        lda     ZP_CB                           ; Is result zero (good?)
-        beq     RUN_SAM_FROM_MACHINE_CODE       ; Yes: play the phonemes.
+        jsr     SAM_COPY_BASIC_SAM_STRING       ; Find SAM$ and copy its content into the SAM_BUFFER.
+        lda     ZP_CB_SAM_STRING_RESULT         ; Is result zero (good?)
+        beq     RUN_SAM_FROM_MACHINE_LANGUAGE   ; Yes: play the phonemes.
         rts                                     ; No: return to BASIC.
 
 ; ----------------------------------------------------------------------------
 
-RUN_SAM_FROM_MACHINE_CODE:
+RUN_SAM_FROM_MACHINE_LANGUAGE:
+
+        ; The documented way to get here is by calling into "SAM_RUN_SAM_FROM_MACHINE_LANGUAGE"
+        ; (jsr $2004), which is simply a jump to RUN_SAM_FROM_MACHINE_LANGUAGE.
 
         jsr     SAM_SAVE_ZP_ADDRESSES           ; Save ZP addresses, then proceed with SAM_SAY_PHONEMES.
 
 ; ----------------------------------------------------------------------------
 
+        ; When we get here, it is expected that SAM_SAVE_ZP_ADDRESSES has been called
+        ; previously to save addresses $E1..$FF.
+
 SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER as sound.
 
         lda     #$FF                            ;
-        sta     D2013                           ;
-        jsr     SUB_26EA                        ; Translate phonemes to binary.
-        lda     D2013                           ;
+        sta     ERROR                           ;
+        jsr     SUB_26EA                        ; Translate text-based SAM_BUFFER phonemes to binary.
+        lda     ERROR                           ;
         cmp     #$FF                            ;
         bne     @5                              ;
         jsr     SUB_2837                        ;
@@ -195,20 +224,22 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
         sta     NMIEN                           ; Disable NMI interrupts.
         sta     IRQEN                           ; Disable IRQ interrupts.
 
-        lda     MODE                            ; Select mode #0 (normal) or mode #1 (debug?)
-        beq     @mode0                          ;
+        lda     LIGHTS                          ; Select mode #0 (normal) or mode #1 (debug?)
+        beq     @lights_off                     ;
 
-        lda     #1                              ; Mode #1: Initialize self-modifying code values.
+        lda     #1                              ; Lights on: Initialize self-modifying code values.
         sta     SMC42DF                         ;
         sta     SMC4210                         ;
         sta     SMC42B0                         ;
-        lda     D200F                           ;
-        sta     SMC403F                         ;
-        lda     D200E                           ;
-        sta     SMC421F                         ;
+        lda     PITCH_L1                        ;
+        sta     SMC_PITCH                       ;
+        lda     SPEED_L1                        ;
+        sta     SMC_SPEED                       ;
         jmp     @join                           ;
 
-@mode0: lda     #0                              ; Mode #0
+@lights_off:
+
+        lda     #0                              ; Initialize lights off (default) mode.
         sta     DMACTL                          ; Disable DMA (Antic)
         lda     #16                             ; Initialize self-modifying code values.
         sta     SMC4210                         ;
@@ -216,10 +247,10 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
         sta     SMC42B0                         ;
         lda     #12                             ;
         sta     SMC42DF                         ;
-        lda     D2011                           ;
-        sta     SMC403F                         ;
-        lda     D2010                           ;
-        sta     SMC421F                         ;
+        lda     PITCH_L0                        ;
+        sta     SMC_PITCH                       ;
+        lda     SPEED_L0                        ;
+        sta     SMC_SPEED                       ;
 
 @join:  lda     D2262,x                         ;
         cmp     #80                             ;
@@ -236,131 +267,136 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
         jsr     SUB_43AA                        ;
 
         ldx     #0                              ; All done. Should we restore the DMA and interrupt state?
-        cpx     ZP_CD                           ;
-        stx     ZP_CD                           ;
+        cpx     SAM_ZP_CD                       ;
+        stx     SAM_ZP_CD                       ;
         beq     @5                              ;
         rts                                     ;
 
-@5:     jsr     SAM_RESTORE_ZP_ADDRESSES        ;
+@5:     jsr     SAM_RESTORE_ZP_ADDRESSES        ; Restore zero page addresses.
         lda     #$FF                            ;
         sta     NMIEN                           ; Enable NMI interrupts.
-        lda     POKMSK                          ; Load IRQ enabled mask.
-        sta     IRQEN                           ; Enable IRQ interrupts.
+        lda     POKMSK                          ; Load shadow IRQ enabled mask.
+        sta     IRQEN                           ; Restore IRQ interrupts.
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
 SAM_COPY_BASIC_SAM_STRING:
 
-        ; This subroutine searches the BASIC string variable named "SAM$".
-        ; Note that the code matches any BASIC string the name of which ends with "SAM$", which is probably not intentional.
+        ; This subroutine searches the BASIC string variable named "SAM$", and copies its contents
+        ; into the SAM_BUFFER.
         ;
-        ; If found, it copies its contents to SAM_BUFFER.
-        ; If not found, we return to BASIC.
+        ; This routine is called as the first thing when SAM is called directly from BASIC.
+        ; It is also called from the RECITER.
+        ;
+        ; Note that the code matches any BASIC string the name of which ends with "SAM$",
+        ;   which is probably not intentional.
+        ;
+        ; If found, it copies the string's content into SAM_BUFFER.
 
-        lda     #0                              ; Initialize $CB, $CC, $CD to zero.
-        sta     ZP_CB                           ; ($CB, $CC) holds the variable index.
-        sta     ZP_CC                           ;
-        sta     ZP_CD                           ;
+        lda     #0                              ; Initialize ZP_CB_PTR and ZP_CD to zero.
+        sta     ZP_CB_PTR_LO                    ; ZP_CB_PTR holds the variable index.
+        sta     ZP_CB_PTR_HI                    ;
+        sta     SAM_ZP_CD                       ;
 
-        lda     VNTP                            ; Copy variable name table pointer VNTP to ($CE, $CF).
-        sta     ZP_CE                           ;
+        lda     VNTP                            ; Copy variable name table pointer VNTP to ZP_CE_PTR.
+        sta     ZP_CE_PTR_LO                    ;
         lda     VNTP+1                          ;
-        sta     ZP_CF                           ;
+        sta     ZP_CE_PTR_HI                    ;
 
-        lda     STARP                           ; String and array pointer STARP to ($D0, $D1).
-        sta     ZP_D0                           ;
+        lda     STARP                           ; Copy string and array pointer STARP to ZP_D0_PTR.
+        sta     ZP_D0_PTR_LO                    ;
         lda     STARP+1                         ;
-        sta     ZP_D1                           ;
+        sta     ZP_D0_PTR_HI                    ;
 
 @check_variable:
 
-        ldy     #0                              ; Check if we find "SAM$" at the location pointed to by
-        lda     (ZP_CE),y                       ; ($CE, $CF).
+        ldy     #0                              ; Check if we find "SAM$" at the ZP_CE_PTR location.
+        lda     (ZP_CE_PTR),y                   ;
         cmp     #'S'                            ;
         bne     @not_found_here                 ; If not found, proceed to @not_found_here.
         iny                                     ;
-        lda     (ZP_CE),y                       ;
+        lda     (ZP_CE_PTR),y                   ;
         cmp     #'A'                            ;
         bne     @not_found_here                 ;
         iny                                     ;
-        lda     (ZP_CE),y                       ;
+        lda     (ZP_CE_PTR),y                   ;
         cmp     #'M'                            ;
         bne     @not_found_here                 ;
         iny                                     ;
-        lda     (ZP_CE),y                       ;
+        lda     (ZP_CE_PTR),y                   ;
         cmp     #'$' + $80                      ;
         bne     @not_found_here                 ;
         jmp     @found_sam_string_variable      ; If found, proceed to @found_sam_string_variable.
 
 @not_found_here:
 
-        lda     ZP_CE                           ; Check if pointer ($CE, $CF) is identical to ($84, $85), which
+        lda     ZP_CE_PTR_LO                    ; Check if pointer ($CE, $CF) is identical to ($84, $85), which
         cmp     VNTD                            ; is the end of BASIC variable memory.
         bne     @continue_search                ;
-        lda     ZP_CF                           ; If not equal, proceed at @3.
+        lda     ZP_CE_PTR_HI                    ; If not equal, proceed at @3.
         cmp     VNTD+1                          ; If equal, we've reached the end of the BASIC program; go to @end.
-        beq     @report_error                   ;
+        beq     @report_error                   ; Variable not found.
 
 @continue_search:
 
         ldy     #0                              ;
-        lda     (ZP_CE),y                       ;
+        lda     (ZP_CE_PTR),y                   ;
         bpl     @4                              ;
-        inc     ZP_CB                           ; Increment variable index whenever we pass through a character with its most significant bit set.
-@4:     inc     ZP_CE                           ; Increment (ZP_CE, ZP_CF).
+        inc     ZP_CB_PTR_LO                    ; Increment variable index whenever we pass through a character with its most significant bit set.
+@4:     inc     ZP_CE_PTR_LO                    ; Increment ZP_CE_PTR.
         bne     @5                              ;
-        inc     ZP_CF                           ;
+        inc     ZP_CE_PTR_HI                    ;
 @5:     jmp     @check_variable                 ; Proceed to check the next variable.
 
 @found_sam_string_variable:
 
-        clc                                     ; Multiply (ZP_CB, ZP_CC) by 8.
-        asl     ZP_CB                           ;
-        rol     ZP_CC                           ;
-        asl     ZP_CB                           ;
-        rol     ZP_CC                           ;
-        asl     ZP_CB                           ;
-        rol     ZP_CC                           ;
+        clc                                     ; Multiply ZP_CB_PTR by 8.
+        asl     ZP_CB_PTR_LO                    ;
+        rol     ZP_CB_PTR_HI                    ;
+        asl     ZP_CB_PTR_LO                    ;
+        rol     ZP_CB_PTR_HI                    ;
+        asl     ZP_CB_PTR_LO                    ;
+        rol     ZP_CB_PTR_HI                    ;
 
-        clc                                     ; Add pointer VVTP (variable value table).
-        lda     ZP_CB                           ;
+        clc                                     ; Make ZP_CB_PTR an address into the Atari Basic varianble value table.
+        lda     ZP_CB_PTR_LO                    ;
         adc     VVTP                            ;
-        sta     ZP_CB                           ;
-        lda     ZP_CC                           ;
+        sta     ZP_CB_PTR_LO                    ;
+        lda     ZP_CB_PTR_HI                    ;
         adc     VVTP+1                          ;
-        sta     ZP_CC                           ;
+        sta     ZP_CB_PTR_HI                    ;
 
         ldy     #5                              ; If size of string exceeds 255, report error.
-        lda     (ZP_CB),y                       ;
+        lda     (ZP_CB_PTR),y                   ;
         bne     @report_error                   ;
-        dey                                     ; Copy size into ZP_CD.
-        lda     (ZP_CB),y                       ;
-        sta     ZP_CD                           ;
+        dey                                     ; Copy string size into SAM_ZP_CD.
+        lda     (ZP_CB_PTR),y                   ;
+        sta     SAM_ZP_CD                       ;
 
-        ldy     #2                              ;
-        lda     (ZP_CB),y                       ;
+        ldy     #2                              ; Prepare ZP_D0_PTR to point at the beginning of the content of SAM$.
+        lda     (ZP_CB_PTR),y                   ;
         clc                                     ;
-        adc     ZP_D0                           ;
-        sta     ZP_D0                           ;
+        adc     ZP_D0_PTR_LO                    ;
+        sta     ZP_D0_PTR_LO                    ;
         ldy     #3                              ;
-        lda     (ZP_CB),y                       ;
-        adc     ZP_D1                           ;
-        sta     ZP_D1                           ;
+        lda     (ZP_CB_PTR),y                   ;
+        adc     ZP_D0_PTR_HI                    ;
+        sta     ZP_D0_PTR_HI                    ;
 
         ldy     #0                              ; Copy content of SAM$ into SAM_BUFFER.
-@copy:  lda     (ZP_D0),y                       ;
+@copy:  lda     (ZP_D0_PTR),y                   ;
         sta     SAM_BUFFER,y                    ;
         iny                                     ;
-        cpy     ZP_CD                           ;
+        cpy     SAM_ZP_CD                       ; Equal to string size?
         bne     @copy                           ;
 
         lda     #$9B                            ; Append closing $9B character.
         sta     SAM_BUFFER,y                    ;
 
-        lda     #0                              ; Zero values ZP_CB, ZP_CD.
-        sta     ZP_CB                           ;
-        sta     ZP_CD                           ;
+        lda     #0                              ;
+        sta     ZP_CB_SAM_STRING_RESULT         ; Use address $CB now to report back the result code. Report success.
+        sta     SAM_ZP_CD                       ; Set $CD to zero.
 
         rts                                     ; Return succesfully.
 
@@ -368,7 +404,7 @@ SAM_COPY_BASIC_SAM_STRING:
 
         jsr     SAM_ERROR_SOUND                 ; Sound an error.
         lda     #1                              ;
-        sta     ZP_CB                           ; Report error.
+        sta     ZP_CB_SAM_STRING_RESULT         ; Use address $CB now to report back the result code. Report error.
         rts                                     ; Done.
 
 ; ----------------------------------------------------------------------------
@@ -701,7 +737,7 @@ SUB_26EA:                                       ; First subroutine called by SAM
         beq     @12                             ;
         dey                                     ;
         bne     @11                             ;
-        stx     D2013                           ;
+        stx     ERROR                           ;
         jsr     SAM_ERROR_SOUND                 ;
         rts                                     ;
 
@@ -1391,6 +1427,8 @@ D3100:  .byte   $5D,$5D,$5C,$5B,$5B,$5B,$5B,$5B ; 3100 5D 5D 5C 5B 5B 5B 5B 5B  
 
 ; ----------------------------------------------------------------------------
 
+        ; D3200 .. D34FF hold the 768 samples of four bits each (>)
+
 D3200:  .byte   $00,$00,$04,$0D,$0D,$0D,$0D,$0D ; 3200 00 00 04 0D 0D 0D 0D 0D  ........
         .byte   $0D,$0D,$0D,$0D,$0D,$0D,$0D,$0B ; 3208 0D 0D 0D 0D 0D 0D 0D 0B  ........
         .byte   $0B,$0B,$0B,$0B,$0B,$0B,$0B,$0D ; 3210 0B 0B 0B 0B 0B 0B 0B 0D  ........
@@ -1835,8 +1873,9 @@ D3F38:  .byte   $02,$0B,$09,$0E,$0D,$12,$01,$02 ; 3F38 02 0B 09 0E 0D 12 01 02  
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 3F60 00 00 00 00 00 00 00 00  ........
         .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 3F68 00 00 00 00 00 00 00 00  ........
         .byte   $00,$00,$00,$00                 ; 3F70 00 00 00 00              ....
-D3F74:  .byte   $00,$01,$02,$02,$02,$03,$03,$04 ; 3F74 00 01 02 02 02 03 03 04  ........
-        .byte   $04,$05,$06,$08,$09,$0B,$0D,$0F ; 3F7C 04 05 06 08 09 0B 0D 0F  ........
+
+D3F74_GAIN:  .byte   0,1,2,2,2,3,3,4,4,5,6,8,9,11,13,15 ; 4-bit sample gain curve.
+
 D3F84:  .byte   $00,$00,$E0,$E6,$EC,$F3,$F9,$00 ; 3F84 00 00 E0 E6 EC F3 F9 00  ........
         .byte   $06,$0C,$06                     ; 3F8C 06 0C 06                 ...
 
@@ -1940,6 +1979,7 @@ L3FFF:  lda     D3EFC,y                         ;
         lda     D3F84,y                         ;
         sta     ZP_E8                           ;
         ldy     ZP_F5                           ;
+
 L4013:  lda     D3600,y                         ;
         sta     D2F00,x                         ;
         lda     D3650,y                         ;
@@ -1956,7 +1996,7 @@ L4013:  lda     D3600,y                         ;
         sta     D3500,x                         ;
         clc                                     ;
 
-SMC403F := * + 1                                ; Self-modifying code: argument of lda #imm below.
+SMC_PITCH := * + 1                              ; Self-modifying code: argument of lda #imm below.
 
         lda     #$40                            ;
         adc     ZP_E8                           ;
@@ -2007,10 +2047,10 @@ L404E:  lda     #0                              ;
         sta     ZP_EE                           ;
         adc     ZP_E7                           ;
         sta     ZP_EA                           ;
-        lda     #0                              ;
-        sta     ZP_EB                           ;
-        lda     #$2E                            ;
-        sta     ZP_EC                           ;
+        lda     #<D2E00                         ;
+        sta     ZP_EB_PTR_LO                    ;
+        lda     #>D2E00                         ;
+        sta     ZP_EB_PTR_HI                    ;
         sec                                     ;
         lda     ZP_EE                           ;
         sbc     ZP_E8                           ;
@@ -2027,8 +2067,8 @@ L404E:  lda     #0                              ;
 
 @150:   lda     ZP_E3                           ;
         sta     ZP_E5                           ;
-        lda     ZP_EC                           ;
-        cmp     #$2E                            ;
+        lda     ZP_EB_PTR_HI                    ;
+        cmp     #>D2E00                         ;
         bne     @200                            ;
         ldy     ZP_E9                           ;
         lda     D3F38,y                         ;
@@ -2051,10 +2091,10 @@ L404E:  lda     #0                              ;
         sbc     ZP_E1                           ;
         sta     ZP_E1                           ;
         ldy     ZP_E2                           ;
-        lda     (ZP_EB),y                       ;
+        lda     (ZP_EB_PTR),y                   ;
         sec                                     ;
         ldy     ZP_E1                           ;
-        sbc     (ZP_EB),y                       ;
+        sbc     (ZP_EB_PTR),y                   ;
         sta     ZP_F2                           ;
         lda     ZP_E5                           ;
         sta     ZP_F1                           ;
@@ -2065,9 +2105,9 @@ L404E:  lda     #0                              ;
 
 @200:   ldy     ZP_EA                           ;
         sec                                     ;
-        lda     (ZP_EB),y                       ;
+        lda     (ZP_EB_PTR),y                   ;
         ldy     ZP_E6                           ;
-        sbc     (ZP_EB),y                       ;
+        sbc     (ZP_EB_PTR),y                   ;
         sta     ZP_F2                           ;
         lda     ZP_E5                           ;
         sta     ZP_F1                           ;
@@ -2077,7 +2117,7 @@ L404E:  lda     #0                              ;
 @199:   lda     #0                              ;
         sta     ZP_F5                           ;
         clc                                     ;
-@399:   lda     (ZP_EB),y                       ;
+@399:   lda     (ZP_EB_PTR),y                   ;
         adc     ZP_F2                           ;
         sta     ZP_ED                           ;
         iny                                     ;
@@ -2098,12 +2138,12 @@ L404E:  lda     #0                              ;
         bne     @401                            ;
 @400:   dec     ZP_ED                           ;
 @401:   lda     ZP_ED                           ;
-        sta     (ZP_EB),y                       ;
+        sta     (ZP_EB_PTR),y                   ;
         clc                                     ;
         bcc     @399                            ;
-@402:   inc     ZP_EC                           ;
-        lda     ZP_EC                           ;
-        cmp     #$35                            ;
+@402:   inc     ZP_EB_PTR_HI                    ;
+        lda     ZP_EB_PTR_HI                    ;
+        cmp     #>D3500                         ;
         beq     @500                            ;
         jmp     @150                            ;
 
@@ -2133,22 +2173,31 @@ L404E:  lda     #0                              ;
         sta     ZP_EE                           ;
         lda     #$48                            ;
         sta     ZP_EA                           ;
-        lda     #$03                            ;
+
+        ; --- Apply sample gain curve.
+
+        lda     #3                              ; Map 3 pages of values through D374 gain curve (?)
         sta     ZP_F5                           ;
-        lda     #0                              ;
-        sta     ZP_EB                           ;
-        lda     #$32                            ;
-        sta     ZP_EC                           ;
-@799:   ldy     #0                              ;
-@800:   lda     (ZP_EB),y                       ;
+
+        lda     #<D3200                         ;
+        sta     ZP_EB_PTR_LO                    ;
+        lda     #>D3200                         ;
+        sta     ZP_EB_PTR_HI                    ;
+
+@799:   ldy     #0                              ; Copy a page, applying the sample gain curve.
+@800:   lda     (ZP_EB_PTR),y                   ;
         tax                                     ;
-        lda     D3F74,x                         ;
-        sta     (ZP_EB),y                       ;
+        lda     D3F74_GAIN,x                    ;
+        sta     (ZP_EB_PTR),y                   ;
         dey                                     ;
         bne     @800                            ;
-        inc     ZP_EC                           ;
+
+        inc     ZP_EB_PTR_HI                    ;
         dec     ZP_F5                           ;
         bne     @799                            ;
+
+        ; --- end of: sample gain curve.
+
         ldy     #0                              ;
         lda     D2E00,y                         ;
         sta     ZP_E9                           ;
@@ -2177,6 +2226,7 @@ L41CE:  lda     D3500,y                         ;
         sta     ZP_E4                           ;
         and     #$F8                            ;
         bne     L41C2                           ;
+
         ldx     ZP_E8                           ;
         clc                                     ;
         lda     D2B00,x                         ;
@@ -2221,7 +2271,7 @@ L421B:  bne     L421E                           ;
 
 L421E:
 
-SMC421F := * + 1                                ; Self-modifying code: argument of lda #imm below.
+SMC_SPEED := * + 1                              ; Self-modifying code: argument of lda #imm below.
 
         lda     #$46                            ;
         sta     ZP_EA                           ;
@@ -2283,10 +2333,10 @@ SUB_426A:
         sta     ZP_F2                           ;
         clc                                     ;
         lda     #$39                            ;
-        adc     ZP_F5                           ;
-        sta     ZP_EC                           ;
+        adc     ZP_F5                           ; SIDNEY
+        sta     ZP_EB_PTR_HI                    ;
         lda     #$C0                            ;
-        sta     ZP_EB                           ;
+        sta     ZP_EB_PTR_LO                    ;
         tya                                     ;
         and     #$F8                            ;
         bne     L4296                           ;
@@ -2304,7 +2354,7 @@ L4296:  eor     #$FF                            ;
         tay                                     ;
 L4299:  lda     #8                              ;
         sta     ZP_F5                           ;
-        lda     (ZP_EB),y                       ;
+        lda     (ZP_EB_PTR),y                   ;
 L429F:  asl     a                               ;
         bcc     @100                            ;
         ldx     ZP_F2                           ;
@@ -2336,7 +2386,7 @@ L42C2:  eor     #$FF                            ;
         ldy     ZP_FF                           ;
 L42C8:  lda     #8                              ;
         sta     ZP_F5                           ;
-        lda     (ZP_EB),y                       ;
+        lda     (ZP_EB_PTR),y                   ;
 L42CE:  asl     a                               ;
         bcc     @100                            ;
         ldx     #$1A                            ;
@@ -2690,7 +2740,7 @@ SAM_ERROR_SOUND:
         ; Make error noise.
 
         lda     #2                              ;
-        sta     ZP_CC                           ;
+        sta     ZP_CC_TEMP                      ;
 @1:     lda     RTCLOK+2                        ; Load LSB of VBLANK counter.
         clc                                     ;
         adc     #8                              ;
@@ -2707,7 +2757,7 @@ SAM_ERROR_SOUND:
         bne     @4                              ;
         cpx     RTCLOK+2                        ; Compare to LSB of VBLANK counter.
         bne     @2                              ;
-        dec     ZP_CC                           ;
+        dec     ZP_CC_TEMP                      ;
         beq     @6                              ;
         txa                                     ;
         clc                                     ;

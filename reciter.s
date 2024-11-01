@@ -25,6 +25,8 @@
 
 ; ----------------------------------------------------------------------------
 
+        .importzp SAM_ZP_CD                     ; Defined by SAM.
+
         .import SAM_BUFFER                      ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
         .import SAM_SAY_PHONEMES                ; Play the phonemes in SAM_BUFFER as sound.
         .import SAM_COPY_BASIC_SAM_STRING       ; Routine to find and copy SAM$ into the SAM_BUFFER.
@@ -34,7 +36,7 @@
 ; ----------------------------------------------------------------------------
 
         .export RECITER_VIA_SAM_FROM_BASIC
-        .export RECITER_VIA_SAM_FROM_MACHINE_CODE
+        .export RECITER_VIA_SAM_FROM_MACHINE_LANGUAGE
 
 ; ----------------------------------------------------------------------------
 
@@ -51,8 +53,6 @@
         .segment "RECITER_BLOCK1"
 
 ; ----------------------------------------------------------------------------
-
-ZP_CD                   := $CD          ;
 
 ZP_SAM_BUFFER_INDEX     := $F5          ; Destination index in the SAM_BUFFER.
 ZP_TEMP1                := $F6          ;
@@ -169,9 +169,12 @@ RECITER_VIA_SAM_FROM_BASIC:
 
 ; ----------------------------------------------------------------------------
 
-RECITER_VIA_SAM_FROM_MACHINE_CODE:
+RECITER_VIA_SAM_FROM_MACHINE_LANGUAGE:
 
         ; The SAM Reciter when entered from machine code.
+        ;
+        ; The documented way to get here is by calling into "SAM_RUN_RECITER_FROM_MACHINE_LANGUAGE"
+        ; (jsr $200B), which is simply a jump to RECITER_VIA_SAM_FROM_MACHINE_LANGUAGE.
         ;
         ; When entering, the English-language string to be translated should be in the SAM_BUFFER.
         ; Here, we're going to copy it to the Reciter buffer, sanatizing the characters on the fly.
@@ -343,7 +346,7 @@ FLUSH_SAM_BUFFER:
         sta     SAM_BUFFER,x                    ;
         lda     ZP_RECITER_BUFFER_INDEX         ; Save reciter buffer index.
         sta     SAVE_RECITER_BUFFER_INDEX       ;
-        sta     ZP_CD                           ; ??? Is this important? (Maybe for SAM?)
+        sta     SAM_ZP_CD                       ; ??? Is this important? (Maybe for SAM?)
         jsr     SAY_PHONEMES                    ; Speak the current phonemes in the SAM_BUFFER.
         lda     SAVE_RECITER_BUFFER_INDEX       ; Restore the reciter buffer index.
         sta     ZP_RECITER_BUFFER_INDEX         ;
