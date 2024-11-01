@@ -25,7 +25,7 @@
 
 ; ----------------------------------------------------------------------------
 
-        .importzp SAM_ZP_CD
+        .importzp SAM_ZP_CD                     ; Defined by SAM.
 
         .import SAM_BUFFER                      ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
         .import SAM_SAY_PHONEMES                ; Play the phonemes in SAM_BUFFER as sound.
@@ -53,7 +53,6 @@
         .segment "RECITER_BLOCK1"
 
 ; ----------------------------------------------------------------------------
-
 
 ZP_SAM_BUFFER_INDEX     := $F5          ; Destination index in the SAM_BUFFER.
 ZP_TEMP1                := $F6          ;
