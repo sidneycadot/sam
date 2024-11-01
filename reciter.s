@@ -52,7 +52,7 @@
 
 ; ----------------------------------------------------------------------------
 
-ZP_CD                   := $CD;
+ZP_CD                   := $CD          ;
 
 ZP_SAM_BUFFER_INDEX     := $F5          ; Destination index in the SAM_BUFFER.
 ZP_TEMP1                := $F6          ;
