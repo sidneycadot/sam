@@ -18,8 +18,6 @@
 
 SAM_BUFFER := _SAM_BUFFER
 
-SAM_ZP_CD = $CD
-
 ; ----------------------------------------------------------------------------
 
 _RECITER_VIA_SAM_FROM_MACHINE_CODE := RECITER_VIA_SAM_FROM_MACHINE_CODE
@@ -296,7 +294,7 @@ TRANSLATE_NEXT_CHARACTER:
         inc     ZP_SAM_BUFFER_INDEX             ; Increment the SAM phoneme buffer index.
         ldx     ZP_SAM_BUFFER_INDEX             ;
                                                 ; We're rendering a space; this would be a good time to flush the buffer.
-        cpx     #$78                            ; Is the SAM phoneme buffer approximately half full?
+        cpx     #$CF                            ; Is the SAM phoneme buffer approximately half full?
         bcs     FLUSH_SAM_BUFFER                ; Yes! Flush (say) the current phoneme buffer.
 
         sta     SAM_BUFFER,x                    ; Store a space character to the SAM phoneme buffer.
@@ -304,19 +302,9 @@ TRANSLATE_NEXT_CHARACTER:
 
 ; ----------------------------------------------------------------------------
 
-SAVE_RECITER_BUFFER_INDEX: .byte 0              ; Temporary storage for ZP_RECITER_BUFFER_INDEX while flushing the phoneme buffer.
-
 FLUSH_SAM_BUFFER:
 
-        lda     #$9B                            ; Add an end-of-line to the rendered buffer.
-        sta     SAM_BUFFER,x                    ;
-        lda     ZP_RECITER_BUFFER_INDEX         ; Save reciter buffer index.
-        sta     SAVE_RECITER_BUFFER_INDEX       ;
-        sta     SAM_ZP_CD                       ; ??? Is this important? (Maybe for SAM?)
-        jsr     SAY_PHONEMES                    ; Speak the current phonemes in the SAM_BUFFER.
-        lda     SAVE_RECITER_BUFFER_INDEX       ; Restore the reciter buffer index.
-        sta     ZP_RECITER_BUFFER_INDEX         ;
-        jmp     TRANSLATE_NEXT_CHUNK            ; Render the next chunk.
+        brk                                     ; Overrun.
 
 ; ----------------------------------------------------------------------------
 

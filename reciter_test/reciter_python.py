@@ -1,7 +1,8 @@
 #! /usr/bin/env python3
 
-"""This is a Python re-implementation of the "SAM Reciter" program, which translates English text to phonemes represented in ASCII."""
+"""This is a Python re-implementation of the "SAM Reciter" program, which translates English text to SAM-style phonemes represented in ASCII."""
 
+import argparse
 import re
 from typing import Optional, NamedTuple
 
@@ -105,7 +106,7 @@ class ReciterRewriteRule(NamedTuple):
 
     * Placeholder '&':
 
-      This placeholder matches and of the single characters C, G, J, S, X, or Z, or any of the two-character combinations "CH", or "SH".
+      This placeholder matches the single characters C, G, J, S, X, or Z, as well as the two-character combinations "CH", or "SH".
 
       That is the intention anyway. In SAM Reciter, this works in the case of prefix matching, but the implementation for suffix matching
       of the '&' placeholder is buggy, so in the suffix it actually matches the two-character combinations "HC", or "HS".
@@ -114,7 +115,7 @@ class ReciterRewriteRule(NamedTuple):
 
     * Placeholder '@':
 
-      This placeholder matches and of the single characters D, J, L, N, R, S, T, or Z, or any of the two-character combinations "TH", "CH", or "SH".
+      This placeholder matches the single characters D, J, L, N, R, S, T, or Z, as well as the two-character combinations "TH", "CH", or "SH".
 
       That is the intention anyway. In SAM Reciter, this works in the case of prefix matching, but the implementation for suffix matching
       of the '@' placeholder is buggy, so in the suffix it actually matches the two-character combinations "HT", "HC", or "HS".
@@ -123,11 +124,11 @@ class ReciterRewriteRule(NamedTuple):
 
     * Placeholder '^':
 
-      This placeholder matches a single consonant, i.e., any of the single letters B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, W, X, Z.
+      This placeholder matches a single consonant, i.e., any of the single letters B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, W, X, or Z.
 
     * Placeholder '+':
 
-      This placeholder matches a subset of the vowels, specifically, any of the single letters E, I, Y.
+      This placeholder matches a subset of the vowels, specifically, any of the single letters E, I, or Y.
 
     * Placeholder ':':
 
@@ -182,7 +183,7 @@ class ReciterRewriteRule(NamedTuple):
         if pattern_character not in ReciterCharacterClass.letters_or_single_quote:
             if pattern_character == ' ':
                 if not (0 <= s_index < len(s)):
-                    return False
+                    return True  # The beginning and end of the string also match 'space'.
                 source_character = s[s_index]
                 return source_character not in ReciterCharacterClass.letters_or_single_quote and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
             elif pattern_character == '#':
@@ -202,6 +203,12 @@ class ReciterRewriteRule(NamedTuple):
                 source_character = s[s_index]
                 return False
             elif pattern_character == '@':
+                if not (0 <= s_index < len(s)):
+                    return False
+                source_character = s[s_index]
+                if source_character in "DJLNRSTZ":
+                    return ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
+                # TODO: two-character combo's.
                 return False
             elif pattern_character == '^':
                 if not (0 <= s_index < len(s)):
@@ -214,7 +221,13 @@ class ReciterRewriteRule(NamedTuple):
                 source_character = s[s_index]
                 return source_character in "EIY" and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
             elif pattern_character == ':':
-                return False
+                if not (0 <= s_index < len(s)):
+                    return True
+                source_character = s[s_index]
+                if source_character in ReciterCharacterClass.consonants:
+                    return ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index, direction)
+                else:
+                    return ReciterRewriteRule._match_pattern(s, s_index, p, p_index + direction, direction)
             elif pattern_character == '%':
                 return False
             else:
@@ -332,6 +345,11 @@ def read_reciter_rules_dictionary(filename: str) -> dict[Optional[str], list[Rec
 
 def main():
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", "--filename", default=default_filename)
+
+    args = parser.add_arguments()
+
     # Instantiate a Reciter and configure it with the English->Phoneme rules.
     reciter_rules_dictionary = read_reciter_rules_dictionary("english_reciter_rules.txt")
 
@@ -339,6 +357,8 @@ def main():
 
     # Read testcases.
     filename = "tests/test_reciter_features.out"
+    #filename = "tests/test_wordlist_short.out"
+    #filename = "tests/test_wordlist_long.out"
     with open(filename) as fi:
         testcases = fi.read().splitlines()
 
@@ -346,8 +366,8 @@ def main():
     print(f"Testing the Python Reciter with {len(testcases)} testcases:")
     print()
 
-    success = 0
-    failure = 0
+    success_count = 0
+    failure_count = 0
 
     testcase_regexp = re.compile("{(.*)} -> {(.*)}")
     for (testcase_index, testcase) in enumerate(testcases, 1):
@@ -357,16 +377,16 @@ def main():
         reciter_reference_output = match.group(2)
         reciter_test_output = reciter(reciter_input)
         if reciter_test_output == reciter_reference_output:
-            success +=1
+            success_count +=1
         else:
-            failure += 1
+            failure_count += 1
             print(f"Testcase #{testcase_index}: {reciter_input!r} failed:")
             print()
             print(f"  Reference output ...... : {reciter_reference_output!r}")
             print(f"  Python output ......... : {reciter_test_output!r}")
             print()
 
-    print(f"Python Reciter class tests: success = {success}, failure = {failure}.")
+    print(f"Python Reciter tests: success = {success_count}, failure = {failure_count}.")
     print()
 
 
