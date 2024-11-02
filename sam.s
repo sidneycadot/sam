@@ -249,7 +249,8 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
 @lights_off:
 
         lda     #0                              ; Initialize lights off (default) mode.
-        sta     DMACTL                          ; Disable DMA (Antic). NOTE: It is never restored?
+        sta     DMACTL                          ; Disable screen DMA by the ANTIC chip.
+                                                ; It will be restored by the VBLANK interrupt process once NMI interrupts are re-enabled.
         lda     #16                             ; Initialize self-modifying code values.
         sta     SMC_4210                        ;
         lda     #13                             ;
