@@ -1,42 +1,55 @@
 #! /usr/bin/env python3
 
-"""This is a Python re-implementation of the "SAM Reciter" program, which translates English text to phonemes represented in ASCII.
-"""
+"""This is a Python re-implementation of the "SAM Reciter" program, which translates English text to phonemes represented in ASCII."""
 
 import re
 from typing import Optional, NamedTuple
 
-def is_digit_character(c: str) -> bool:
-    """Check if the character c is a decimal digit."""
-    assert len(c) == 1
-    return c in "0123456789"
 
-def is_letter_or_single_quote_character(c: str) -> bool:
-    """Check if the character c is either a single quote or an uppercase letter."""
-    assert len(c) == 1
-    return c in "'ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+class ReciterCharacterClass:
+    """Character classes used by SAM Reciter during rule matching."""
 
-def is_miscellaneous_symbol_or_digit_character(c: str) -> bool:
-    """Check if the character c is a miscellaneous symbol or a digit character."""
-    assert len(c) == 1
-    return c in "!\"#$%&'*+,-./0123456789:;<=>?@^"
+    SPACE = ' '
+    SINGLE_QUOTE = '\''
+    BACKSLASH = '\\'
 
-def is_vowel_character(c: str) -> bool:
-    """Check if the character c is a vowel."""
-    assert len(c) == 1
-    return c in "AEIOUY"
+    digits = frozenset({
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
+    })
 
-def is_consonant_character(c: str) -> bool:
-    """Check if the character c is a consonant."""
-    assert len(c) == 1
-    return c in "BCDFGHJKLMNPQRSTVWXZ"
+    letters_or_single_quote = frozenset({
+        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+        'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+        SINGLE_QUOTE
+    })
 
-def is_space_like_character(c: str) -> bool:
-    """Check if the character c is 'space-like', meaning it will be treated like a space."""
-    assert len(c) == 1
-    if ord(c) < 32:
-        return True
-    return c in " ()[\\]_"
+    miscellaneous_symbols_or_digits = frozenset({
+        '!', '"', '#', '$', '%', '&', SINGLE_QUOTE, '*', '+', ',', '-', '.', '/',
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+        ':', ';', '<', '=', '>', '?', '@', '^'
+    })
+
+    vowels = frozenset({
+        'A', 'E', 'I', 'O', 'U', 'Y'
+    })
+
+    consonants = frozenset({
+        'B', 'C', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'M',
+        'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'X', 'Z'
+    })
+
+    # These are the characters in the range '\x00' to '\x5f' for which the
+    # character properties byte in the SAM reciter code is zero.
+    space_like_characters = frozenset({
+        '\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07',
+        '\x08', '\x09', '\x0a', '\x0b', '\x0c', '\x0d', '\x0e', '\x0f',
+        '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17',
+        '\x18', '\x19', '\x1a', '\x1b', '\x1c', '\x1d', '\x1e', '\x1f',
+        SPACE, '(', ')', '[', BACKSLASH, ']', '_'
+    })
+
+    # Remove convenience constants from the class.
+    del SPACE, SINGLE_QUOTE, BACKSLASH
 
 
 class ReciterRewriteRule(NamedTuple):
@@ -124,8 +137,7 @@ class ReciterRewriteRule(NamedTuple):
 
       (TBW)
 
-    Note: in Reciter, this placeholder is only implemented for suffixes, not for prefixes.
-
+      Note: in SAM Reciter, this placeholder is only implemented for suffixes, not for prefixes.
     """
 
     prefix: str
@@ -167,17 +179,17 @@ class ReciterRewriteRule(NamedTuple):
 
         pattern_character = p[p_index]
 
-        if not is_letter_or_single_quote_character(pattern_character):
+        if pattern_character not in ReciterCharacterClass.letters_or_single_quote:
             if pattern_character == ' ':
                 if not (0 <= s_index < len(s)):
                     return False
                 source_character = s[s_index]
-                return not is_letter_or_single_quote_character(source_character) and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
+                return source_character not in ReciterCharacterClass.letters_or_single_quote and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
             elif pattern_character == '#':
                 if not (0 <= s_index < len(s)):
                     return False
                 source_character = s[s_index]
-                return is_vowel_character(source_character) and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
+                return source_character in ReciterCharacterClass.vowels and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
             elif pattern_character == '.':
                 if not (0 <= s_index < len(s)):
                     return False
@@ -188,7 +200,6 @@ class ReciterRewriteRule(NamedTuple):
                 if not (0 <= s_index < len(s)):
                     return False
                 source_character = s[s_index]
-
                 return False
             elif pattern_character == '@':
                 return False
@@ -196,7 +207,7 @@ class ReciterRewriteRule(NamedTuple):
                 if not (0 <= s_index < len(s)):
                     return False
                 source_character = s[s_index]
-                return is_consonant_character(source_character) and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
+                return source_character in ReciterCharacterClass.consonants and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
             elif pattern_character == '+':
                 if not (0 <= s_index < len(s)):
                     return False
@@ -252,12 +263,12 @@ class Reciter:
 
         # If the source character is a period that is not followed by a digit, the period denotes an end of a sentence.
         # Handle this by putting emitting a period pseudo-phoneme.
-        if source_character == "." and not ((source_index + 1) < len(source) and is_digit_character(source[source_index + 1])):
+        if source_character == "." and not ((source_index + 1) < len(source) and source[source_index + 1] in ReciterCharacterClass.digits):
             return (1, ".")
 
-        if is_miscellaneous_symbol_or_digit_character(source_character):
+        if source_character in ReciterCharacterClass.miscellaneous_symbols_or_digits:
             rule_list = self.rules_dictionary[None]
-        elif is_space_like_character(source_character):
+        elif source_character in ReciterCharacterClass.space_like_characters:
             return (1, " ")
         else:
             rule_list = self.rules_dictionary[source_character]
@@ -323,6 +334,7 @@ def main():
 
     # Instantiate a Reciter and configure it with the English->Phoneme rules.
     reciter_rules_dictionary = read_reciter_rules_dictionary("english_reciter_rules.txt")
+
     reciter = Reciter(reciter_rules_dictionary)
 
     # Read testcases.
@@ -356,6 +368,8 @@ def main():
 
     print(f"Python Reciter class tests: success = {success}, failure = {failure}.")
     print()
+
+    print(reciter_rules_dictionary)
 
 if __name__ == "__main__":
     main()
