@@ -28,6 +28,7 @@
         .importzp SAM_ZP_CD                     ; Defined by SAM.
 
         .import SAM_BUFFER                      ; 256-byte buffer where SAM receives its phoneme representation to be rendered as sound.
+                                                ; Also used to receive the initial English text.
         .import SAM_SAY_PHONEMES                ; Play the phonemes in SAM_BUFFER as sound.
         .import SAM_COPY_BASIC_SAM_STRING       ; Routine to find and copy SAM$ into the SAM_BUFFER.
         .import SAM_SAVE_ZP_ADDRESSES           ; Save zero-page addresses used by SAM.
@@ -60,9 +61,11 @@ ZP_RB_SUFFIX_INDEX      := $F7          ; Reciter buffer suffix index.
 ZP_RB_PREFIX_INDEX      := $F8          ; Reciter buffer prefix index.
 ZP_RB_LAST_CHAR_INDEX   := $F9          ;
 ZP_RECITER_BUFFER_INDEX := $FA          ; Source index in the RECITER_BUFFER.
+
 ZP_RULE_PTR             := $FB          ; rule pointer
 ZP_RULE_PTR_LO          := $FB          ; rule pointer, LSB
 ZP_RULE_PTR_HI          := $FC          ; rule pointer, MSB
+
 ZP_TEMP2                := $FD          ;
 ZP_RULE_SUFFIX_INDEX    := $FE          ;
 ZP_RULE_PREFIX_INDEX    := $FF          ;
@@ -342,14 +345,23 @@ SAVE_RECITER_BUFFER_INDEX: .byte 0              ; Temporary storage for ZP_RECIT
 
 FLUSH_SAM_BUFFER:
 
-        lda     #$9B                            ; Add an end-of-line to the rendered buffer.
+        lda     #$9B                            ; Add an end-of-line to the phoneme buffer.
         sta     SAM_BUFFER,x                    ;
+
         lda     ZP_RECITER_BUFFER_INDEX         ; Save reciter buffer index.
         sta     SAVE_RECITER_BUFFER_INDEX       ;
-        sta     SAM_ZP_CD                       ; ??? Is this important? (Maybe for SAM?)
+
+        sta     SAM_ZP_CD                       ; Store non-zero here to let SAM_SAY_PHONEMES know that this is not
+                                                ; the last time it is called. This prevents SAM_SAY_PHONEMES from
+                                                ; restoring ZP addresses and re-enabling interrupts when it's done.
+                                                ;
+                                                ; SAM_SAY_PHONEMES will reset the value of SAM_ZP_CD to zero.
+
         jsr     SAY_PHONEMES                    ; Speak the current phonemes in the SAM_BUFFER.
+
         lda     SAVE_RECITER_BUFFER_INDEX       ; Restore the reciter buffer index.
         sta     ZP_RECITER_BUFFER_INDEX         ;
+
         jmp     TRANSLATE_NEXT_CHUNK            ; Render the next chunk.
 
 ; ----------------------------------------------------------------------------
@@ -372,13 +384,13 @@ TRANSLATE_ALPHABETIC_CHARACTER:
 
 TRY_NEXT_RULE:
 
-        ; ZP_RULE_PTR is pointing to a rule or rule index.
+        ; Scan forward to find a new rule which we will try to match.
+        ;
+        ; ZP_RULE_PTR is incremented until it points to a value with its most significant bit set.
+        ; The rule to be matched comes right after that.
+        ; This will be used as the base pointer while attempting to match the text in the RECITER_BUFFER with the rule.
 
         ldy     #0                              ; Set Y=0 for accessing ZP_RULE_PTR later on.
-
-        ; Find end-of-rule.
-        ; ZP_RULE_PTR is incremented until it points to a value with its most significant bit set.
-        ; This will be used as the base pointer while attempting to match the text in the RECITER_BUFFER with the rule.
 
 @1:     clc                                     ; Increment ZP_RULE_PTR by one.
         lda     ZP_RULE_PTR_LO                  ;
@@ -405,14 +417,14 @@ PROCESS_RULE:
         ; ZP_RULE_PTR points to a character in front of a rule (which has bit #7 set).
         ; (ZP_RULE_PTR),y is a left-parenthesis character.
 
-        sty     ZP_RULE_PREFIX_INDEX            ; ZP_RULE_PREFIX_INDEX is the Y offset for the '(' character in the rule.
+        sty     ZP_RULE_PREFIX_INDEX            ; ZP_RULE_PREFIX_INDEX is the offset for the '(' character in the rule.
 
-@1:     iny                                     ; Scan the rule definition for ')' character.
+@1:     iny                                     ; Scan the rule for the ')' character.
         lda     (ZP_RULE_PTR),y                 ;
         cmp     #')'                            ;
         bne     @1                              ;
 
-        sty     ZP_RULE_SUFFIX_INDEX            ; ZP_RULE_SUFFIX_INDEX is the Y offset for the ')' character.
+        sty     ZP_RULE_SUFFIX_INDEX            ; ZP_RULE_SUFFIX_INDEX is the offset for the ')' character in the rule.
 
 @2:     iny                                     ; Scan the rule definition for the '=' character.
         lda     (ZP_RULE_PTR),y                 ;
@@ -480,7 +492,7 @@ MATCH_PREFIX_CHARACTER:
 
 MATCH_PREFIX_PLACEHOLDER:
 
-        ; Check for placeholder match of a pattern character to the left of the left parenthesis in the rule match-pattern.
+        ; Check for match of a placeholder character in the prefix of the rule match-pattern.
 
         lda     ZP_TEMP1                        ; Load the match rule placeholder character.
 
@@ -795,7 +807,7 @@ MATCH_SUFFIX_SUCCESS_2:
 
 MATCH_SUFFIX_PLACEHOLDER:
 
-        ; Check for placeholder match of a pattern character to the right of the right parenthesis in the rule match-pattern.
+        ; Check for match of a placeholder character in the suffix of the rule match-pattern.
 
         lda     ZP_TEMP1                        ; Load the match rule placeholder character.
 
@@ -886,7 +898,16 @@ MATCH_SUFFIX_SUCCESS_4:
 
 MATCH_SUFFIX_AMPERSAND:
 
-        ; A '&' character in the rule matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
+        ; A '&' character in the rule tries to match any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
+        ;
+        ; That's the intention, but there is a bug here.
+        ;
+        ; *** BUG *** This code is more-or-less identical to the code in MATCH_PREFIX_AMPERSAND,
+        ;             but here we're scanning from left-to-right, which is makes a difference for
+        ;             handling the two-character matches.
+        ;
+        ; Intended behavior : match C / G / J / S / X / Z / CH / SH
+        ; Actual behavior   : match C / G / J / S / X / Z / HC / HS
 
         jsr     GET_SUFFIX_CHARACTER_PROPERTIES ;
         and     #$10                            ;
@@ -899,16 +920,26 @@ MATCH_SUFFIX_AMPERSAND:
 @1:     inx                                     ;
         lda     RECITER_BUFFER,x                ;
         cmp     #'C'                            ;
-        beq     MATCH_SUFFIX_SUCCESS_4          ; Match: "CH".
+        beq     MATCH_SUFFIX_SUCCESS_4          ; Match: "HC".
         cmp     #'S'                            ;
-        beq     MATCH_SUFFIX_SUCCESS_4          ; Match: "SH".
+        beq     MATCH_SUFFIX_SUCCESS_4          ; Match: "HS".
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
 
 MATCH_SUFFIX_AT_SIGN:
 
-        ; A '@' character in a rule matches any of the letters {D, J, L, N, R, S, T, Z} or a two-letter combination {TH, CH, SH}.
+        ; A '@' character in the rule tries to match any of the letters {D / J / L / N / R / S / T / Z}
+        ;   or a two-letter combination {TH, CH, SH}.
+        ;
+        ; That's the intention, but there is a bug here.
+        ;
+        ; *** BUG *** This code is more-or-less identical to the code in MATCH_PREFIX_AT_SIGN,
+        ;             but here we're scanning from left-to-right, which is makes a difference for
+        ;             handling the two-character matches.
+        ;
+        ; Intended behavior : match D / J / L / N / R / S / T / Z / TH / CH / SH.
+        ; Actual behavior   : match D / J / L / N / R / S / T / Z / HT / HC / HS.
 
         jsr     GET_SUFFIX_CHARACTER_PROPERTIES ;
         and     #$04                            ;
@@ -919,11 +950,11 @@ MATCH_SUFFIX_AT_SIGN:
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 @1:     cmp     #'T'                            ;
-        beq     MATCH_SUFFIX_SUCCESS_5          ; Match: "TH".
+        beq     MATCH_SUFFIX_SUCCESS_5          ; Match: "HT".
         cmp     #'C'                            ;
-        beq     MATCH_SUFFIX_SUCCESS_5          ; Match: "CH".
+        beq     MATCH_SUFFIX_SUCCESS_5          ; Match: "HC".
         cmp     #'S'                            ;
-        beq     MATCH_SUFFIX_SUCCESS_5          ; Match: "SH".
+        beq     MATCH_SUFFIX_SUCCESS_5          ; Match: "HS".
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------

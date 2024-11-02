@@ -116,9 +116,9 @@ ZP_F6 := $F6                                    ;
 ZP_F7 := $F7                                    ;
 ZP_F8 := $F8                                    ;
 ZP_F9 := $F9                                    ;
-ZP_FA := $FA                                    ;
-ZP_FB := $FB                                    ;
-ZP_FC := $FC                                    ;
+ZP_SAVE_Y := $FA                                ;
+ZP_SAVE_X := $FB                                ;
+ZP_SAVE_A := $FC                                ;
 ZP_FD := $FD                                    ;
 ZP_FE := $FE                                    ;
 ZP_FF := $FF                                    ;
@@ -203,10 +203,19 @@ RUN_SAM_FROM_MACHINE_LANGUAGE:
 
 ; ----------------------------------------------------------------------------
 
+SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER as sound.
+
         ; When we get here, it is expected that SAM_SAVE_ZP_ADDRESSES has been called
         ; previously to save addresses $E1..$FF.
-
-SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER as sound.
+        ;
+        ; The content of SAM_ZP_CD on enrty of this function is important.
+        ; If it is zero (the normal value), SAM_SAY_PHONEMES will restore zero
+        ; page addresses ($E1..$FF range) and re-enable interrupts when done.
+        ;
+        ; To prevent this, the caller can set SAM_ZP_CD to a non-zero value prior
+        ; to the call, which promises that the current call is not the last call.
+        ;
+        ; SAM_SAY_PHONEMES itself resets SAM_ZP_CD back to zero.
 
         lda     #$FF                            ;
         sta     ERROR                           ;
@@ -220,9 +229,9 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
         jsr     SUB_43F2                        ;
         jsr     SUB_279A                        ;
 
-        lda     #0                              ; Init hardware.
-        sta     NMIEN                           ; Disable NMI interrupts.
-        sta     IRQEN                           ; Disable IRQ interrupts.
+        lda     #0                              ; Time-critical section starts here:
+        sta     NMIEN                           ; - Disable NMI interrupts.
+        sta     IRQEN                           ; - Disable IRQ interrupts.
 
         lda     LIGHTS                          ; Select mode #0 (normal) or mode #1 (debug?)
         beq     @lights_off                     ;
@@ -240,7 +249,7 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
 @lights_off:
 
         lda     #0                              ; Initialize lights off (default) mode.
-        sta     DMACTL                          ; Disable DMA (Antic)
+        sta     DMACTL                          ; Disable DMA (Antic). NOTE: It is never restored?
         lda     #16                             ; Initialize self-modifying code values.
         sta     SMC_4210                        ;
         lda     #13                             ;
@@ -268,11 +277,11 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
 
         jsr     SUB_43AA                        ;
 
-        ldx     #0                              ; All done. Should we restore the DMA and interrupt state?
+        ldx     #0                              ; Inspect SAM_ZP_CD to see if it is currently 0.
         cpx     SAM_ZP_CD                       ;
-        stx     SAM_ZP_CD                       ;
-        beq     @5                              ;
-        rts                                     ;
+        stx     SAM_ZP_CD                       ; Always reset SAM_ZP_CD to zero.
+        beq     @5                              ; If it was previously zero, restore ZP addresses and interrupts.
+        rts                                     ; If not, just return.
 
 @5:     jsr     SAM_RESTORE_ZP_ADDRESSES        ; Restore zero page addresses.
         lda     #$FF                            ;
@@ -285,21 +294,42 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
 
 SAM_COPY_BASIC_SAM_STRING:
 
-        ; This subroutine searches the BASIC string variable named "SAM$", and copies its contents
-        ; into the SAM_BUFFER.
+        ; This subroutine searches the BASIC string variable SAM$ and copies its contents
+        ; into the SAM_BUFFER. Setting SAM$ is the prescribed way to pass data to SAM or
+        ; the Reciter when using Atari BASIC.
         ;
         ; This routine is called as the first thing when SAM is called directly from BASIC.
         ; It is also called from the RECITER.
         ;
-        ; Note that the code matches any BASIC string the name of which ends with "SAM$",
-        ;   which is probably not intentional.
+        ; *** BUG *** The code matches any BASIC string variable that ends with "SAM$".
+        ;             So FLOTSAM$ or JETSAM$ will also be matched.
         ;
-        ; If found, it copies the string's content into SAM_BUFFER.
+        ; If a string name ending in SAM$ is found, its content is copied to the SAM_BUFFER.
+        ;
+        ; *** Note #1 *** Dual use of $CB.
+        ;
+        ; In this routine, the variable $CB is used for two purposes:
+        ;
+        ; (1) As the lo byte of the ZP_CB_PTR, while looking for and copying the string.
+        ;     When used like this, the address is called ZP_CB_PTR_LO.
+        ; (2) To report success/failure back to the caller, at the end of the subroutine.
+        ;     When used like this, the address is called ZP_CB_SAM_STRING_RESULT.
+        ;
+        ; *** Note #2 *** Use of ZP_SAM_CD in this routine.
+        ;
+        ; The use of the variable "SAM_ZP_CD" in this subroutine is somewhat confusing.
+        ;
+        ; * It is initialized to 0 at the start.
+        ; * It is used to hold the size of the string being copied from.
+        ; * It is set to zero in the succesful return path.
+        ;
+        ; The net result, as seen from the caller, is that this routine always sets SAM_ZP_CD to zero.
 
         lda     #0                              ; Initialize ZP_CB_PTR and ZP_CD to zero.
-        sta     ZP_CB_PTR_LO                    ; ZP_CB_PTR holds the variable index.
-        sta     ZP_CB_PTR_HI                    ;
-        sta     SAM_ZP_CD                       ;
+        sta     ZP_CB_PTR_LO                    ; For now, ZP_CB_PTR will hold a 0-based variable index;
+        sta     ZP_CB_PTR_HI                    ;   it will become a proper pointer later on.
+
+        sta     SAM_ZP_CD                       ; Initialize string size to 0.
 
         lda     VNTP                            ; Copy variable name table pointer VNTP to ZP_CE_PTR.
         sta     ZP_CE_PTR_LO                    ;
@@ -311,7 +341,7 @@ SAM_COPY_BASIC_SAM_STRING:
         lda     STARP+1                         ;
         sta     ZP_D0_PTR_HI                    ;
 
-@check_variable:
+@check_variable_name:
 
         ldy     #0                              ; Check if we find "SAM$" at the ZP_CE_PTR location.
         lda     (ZP_CE_PTR),y                   ;
@@ -327,33 +357,34 @@ SAM_COPY_BASIC_SAM_STRING:
         bne     @not_found_here                 ;
         iny                                     ;
         lda     (ZP_CE_PTR),y                   ;
-        cmp     #'$' + $80                      ;
+        cmp     #'$' + $80                      ; String names end with '$', with the most significant bit set to one.
         bne     @not_found_here                 ;
         jmp     @found_sam_string_variable      ; If found, proceed to @found_sam_string_variable.
 
 @not_found_here:
 
-        lda     ZP_CE_PTR_LO                    ; Check if pointer ($CE, $CF) is identical to ($84, $85), which
-        cmp     VNTD                            ; is the end of BASIC variable memory.
-        bne     @continue_search                ;
-        lda     ZP_CE_PTR_HI                    ; If not equal, proceed at @3.
-        cmp     VNTD+1                          ; If equal, we've reached the end of the BASIC program; go to @end.
-        beq     @report_error                   ; Variable not found.
+        lda     ZP_CE_PTR_LO                    ; Check if pointer ZP_CE_PTR is identical to VNTD, which
+        cmp     VNTD                            ; is the end of BASIC variable name memory.
+        bne     @continue_search                ; If not equal, continue the search.
+        lda     ZP_CE_PTR_HI                    ;
+        cmp     VNTD+1                          ; If equal, we've reached the end of the BASIC program,
+        beq     @report_error                   ; and we didn't find a matching variable name. Report an error.
 
 @continue_search:
 
         ldy     #0                              ;
         lda     (ZP_CE_PTR),y                   ;
-        bpl     @4                              ;
-        inc     ZP_CB_PTR_LO                    ; Increment variable index whenever we pass through a character with its most significant bit set.
-@4:     inc     ZP_CE_PTR_LO                    ; Increment ZP_CE_PTR.
-        bne     @5                              ;
+        bpl     @1                              ; Increment variable index whenever we pass over
+        inc     ZP_CB_PTR_LO                    ;   a character with its most significant bit set.
+
+@1:     inc     ZP_CE_PTR_LO                    ; Increment ZP_CE_PTR.
+        bne     @2                              ;
         inc     ZP_CE_PTR_HI                    ;
-@5:     jmp     @check_variable                 ; Proceed to check the next variable.
+@2:     jmp     @check_variable_name            ; Proceed to check if the variable name is in this new location.
 
 @found_sam_string_variable:
 
-        clc                                     ; Multiply ZP_CB_PTR by 8.
+        clc                                     ; Multiply variable index ZP_CB_PTR by 8.
         asl     ZP_CB_PTR_LO                    ;
         rol     ZP_CB_PTR_HI                    ;
         asl     ZP_CB_PTR_LO                    ;
@@ -361,27 +392,28 @@ SAM_COPY_BASIC_SAM_STRING:
         asl     ZP_CB_PTR_LO                    ;
         rol     ZP_CB_PTR_HI                    ;
 
-        clc                                     ; Make ZP_CB_PTR an address into the Atari Basic varianble value table.
+        clc                                     ; Make ZP_CB_PTR an address into the Atari BASIC variable value table.
         lda     ZP_CB_PTR_LO                    ;
-        adc     VVTP                            ;
+        adc     VVTP                            ; In other words: ptr = VVTP + 8 * index_when_found
         sta     ZP_CB_PTR_LO                    ;
         lda     ZP_CB_PTR_HI                    ;
         adc     VVTP+1                          ;
         sta     ZP_CB_PTR_HI                    ;
 
-        ldy     #5                              ; If size of string exceeds 255, report error.
-        lda     (ZP_CB_PTR),y                   ;
+        ldy     #5                              ; Fifth byte of entry is MSB of size.
+        lda     (ZP_CB_PTR),y                   ; If the size of the string exceeds 255, report an error.
         bne     @report_error                   ;
-        dey                                     ; Copy string size into SAM_ZP_CD.
+
+        dey                                     ; Copy string size (LSB of string size word) into SAM_ZP_CD.
         lda     (ZP_CB_PTR),y                   ;
         sta     SAM_ZP_CD                       ;
 
         ldy     #2                              ; Prepare ZP_D0_PTR to point at the beginning of the content of SAM$.
         lda     (ZP_CB_PTR),y                   ;
-        clc                                     ;
+        clc                                     ; ZP_D0_PTR = STARP + offset.
         adc     ZP_D0_PTR_LO                    ;
-        sta     ZP_D0_PTR_LO                    ;
-        ldy     #3                              ;
+        sta     ZP_D0_PTR_LO                    ; Note: it is unclear why ZP_D0_PTR_LO was initialized above.
+        ldy     #3                              ; Adding to STARP here would be more efficient.
         lda     (ZP_CB_PTR),y                   ;
         adc     ZP_D0_PTR_HI                    ;
         sta     ZP_D0_PTR_HI                    ;
@@ -393,26 +425,27 @@ SAM_COPY_BASIC_SAM_STRING:
         cpy     SAM_ZP_CD                       ; Equal to string size?
         bne     @copy                           ;
 
-        lda     #$9B                            ; Append closing $9B character.
+        lda     #$9B                            ; Append $9B character, denoting end of line.
         sta     SAM_BUFFER,y                    ;
 
-        lda     #0                              ;
-        sta     ZP_CB_SAM_STRING_RESULT         ; Use address $CB now to report back the result code. Report success.
-        sta     SAM_ZP_CD                       ; Set $CD to zero.
+@success:
 
+        lda     #0                              ; Use address $CB now to report back the result code. 0 = success.
+        sta     ZP_CB_SAM_STRING_RESULT         ; 
+        sta     SAM_ZP_CD                       ; Reset SAM_ZP_CD to zero.
         rts                                     ; Return succesfully.
 
 @report_error:
 
         jsr     SAM_ERROR_SOUND                 ; Sound an error.
-        lda     #1                              ;
-        sta     ZP_CB_SAM_STRING_RESULT         ; Use address $CB now to report back the result code. Report error.
-        rts                                     ; Done.
+        lda     #1                              ; Use address $CB now to report back the result code. 1 = error.
+        sta     ZP_CB_SAM_STRING_RESULT         ; 
+        rts                                     ; Return to caller.
 
 ; ----------------------------------------------------------------------------
 
         ; Three memory blocks of 256 bytes each.
-        ; We assume they are filled with garbage in the binary image.
+        ; We conjucture that they are filled with garbage in the binary image.
 
         ; We suspect that D2262 is the binary phoneme buffer.
 
@@ -554,50 +587,43 @@ STRESS:  .byte   "*123456789"          ; Note: stress markers are the characters
 PHONEMES_1ST:  .byte   " .?,-IIEAAAAUAIEUORLWYWRLWYMNNDQSSFT//ZZVDC*J***EAOAOUB**D**G**G**P**T**K**K**UUU"
 PHONEMES_2ND:  .byte   "*****YHHEAHOHXXRXHXXXXH******XX**H*HHX*H*HH*****YYYWWW*********X***********X**LMN"
 
-D260E:  .byte   $00,$00,$00,$00,$00,$A4,$A4,$A4 ; 260E 00 00 00 00 00 A4 A4 A4  ........
-        .byte   $A4,$A4,$A4,$84,$84,$A4,$A4,$84 ; 2616 A4 A4 A4 84 84 A4 A4 84  ........
-        .byte   $84,$84,$84,$84,$84,$84,$44,$44 ; 261E 84 84 84 84 84 84 44 44  ......DD
-        .byte   $44,$44,$44,$4C,$4C,$4C,$48,$4C ; 2626 44 44 44 4C 4C 4C 48 4C  DDDLLLHL
-        .byte   $40,$40,$40,$40,$40,$40,$44,$44 ; 262E 40 40 40 40 40 40 44 44  @@@@@@DD
-        .byte   $44,$44,$48,$40,$4C,$44,$00,$00 ; 2636 44 44 48 40 4C 44 00 00  DDH@LD..
-        .byte   $B4,$B4,$B4,$94,$94,$94,$4E,$4E ; 263E B4 B4 B4 94 94 94 4E 4E  ......NN
-        .byte   $4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E ; 2646 4E 4E 4E 4E 4E 4E 4E 4E  NNNNNNNN
-        .byte   $4E,$4E,$4B,$4B,$4B,$4B,$4B,$4B ; 264E 4E 4E 4B 4B 4B 4B 4B 4B  NNKKKKKK
-        .byte   $4B,$4B,$4B,$4B,$4B,$4B         ; 2656 4B 4B 4B 4B 4B 4B        KKKKKK
-D265C:  .byte   $80,$C1,$C1,$C1,$C1,$00,$00,$00 ; 265C 80 C1 C1 C1 C1 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 2664 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$00,$00,$10 ; 266C 00 00 00 00 00 00 00 10  ........
-        .byte   $10,$10,$10,$08,$0C,$08,$04,$40 ; 2674 10 10 10 08 0C 08 04 40  .......@
-        .byte   $24,$20,$20,$24,$00,$00,$24,$20 ; 267C 24 20 20 24 00 00 24 20  $  $..$ 
-        .byte   $20,$24,$20,$20,$00,$20,$00,$00 ; 2684 20 24 20 20 00 20 00 00   $  . ..
-        .byte   $00,$00,$00,$00,$00,$00,$00,$00 ; 268C 00 00 00 00 00 00 00 00  ........
-        .byte   $00,$04,$04,$04,$00,$00,$00,$00 ; 2694 00 04 04 04 00 00 00 00  ........
-        .byte   $00,$00,$00,$00,$00,$04,$04,$04 ; 269C 00 00 00 00 00 04 04 04  ........
-        .byte   $00,$00,$00,$00,$00,$00         ; 26A4 00 00 00 00 00 00        ......
+; ----------------------------------------------------------------------------
+
+D260E:  .byte   $00,$00,$00,$00,$00,$A4,$A4,$A4,$A4,$A4,$A4,$84,$84,$A4,$A4,$84
+        .byte   $84,$84,$84,$84,$84,$84,$44,$44,$44,$44,$44,$4C,$4C,$4C,$48,$4C
+        .byte   $40,$40,$40,$40,$40,$40,$44,$44,$44,$44,$48,$40,$4C,$44,$00,$00
+        .byte   $B4,$B4,$B4,$94,$94,$94,$4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E
+        .byte   $4E,$4E,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B
+
+D265C:  .byte   $80,$C1,$C1,$C1,$C1,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$10,$10,$10,$10,$08,$0C,$08,$04,$40
+        .byte   $24,$20,$20,$24,$00,$00,$24,$20,$20,$24,$20,$20,$00,$20,$00,$00
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$04,$04,$00,$00,$00,$00
+        .byte   $00,$00,$00,$00,$00,$04,$04,$04,$00,$00,$00,$00,$00,$00
 
 ; ----------------------------------------------------------------------------
 
-SUB_26AA:
+SUB_SAVE_AXY:
 
-        sta     ZP_FC                           ;
-        stx     ZP_FB                           ;
-        sty     ZP_FA                           ;
+        sta     ZP_SAVE_A                       ;
+        stx     ZP_SAVE_X                       ;
+        sty     ZP_SAVE_Y                       ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
-SUB_26B1:
+SUB_RESTORE_AXY:
 
-        lda     ZP_FC                           ;
-        ldx     ZP_FB                           ;
-        ldy     ZP_FA                           ;
+        lda     ZP_SAVE_A                       ;
+        ldx     ZP_SAVE_X                       ;
+        ldy     ZP_SAVE_Y                       ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
 SUB_26B8:
 
-        jsr     SUB_26AA                        ;
+        jsr     SUB_SAVE_AXY                    ;
         ldx     #$FF                            ;
         ldy     #0                              ;
 @1:     dex                                     ;
@@ -616,7 +642,7 @@ SUB_26B8:
         sta     D2362,x                         ;
         lda     ZP_F7                           ;
         sta     D2462,x                         ;
-        jsr     SUB_26B1                        ;
+        jsr     SUB_RESTORE_AXY                 ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
@@ -641,7 +667,7 @@ SUB_26EA:                                       ; First subroutine called by SAM
         cmp     #$9B                            ;
         beq     @13                             ;
 
-        sta     ZP_FE                           ; Copy 2-byte phoneme to ZP_FE,ZP_FD.
+        sta     ZP_FE                           ; Copy 2-byte phoneme to ZP_FE, ZP_FD.
         inx                                     ;
         lda     SAM_BUFFER,x                    ;
         sta     ZP_FD                           ;
@@ -1208,6 +1234,9 @@ D2E00:  .byte   $2C,$2C,$2A,$28,$27,$26,$25,$23,$23,$25,$27,$29,$2B,$2E,$31,$33
 
 ; ----------------------------------------------------------------------------
 
+        ; The following three tables, 160 bytes each, only seem to have their
+        ; first 162 values used.
+
 D2F00:  .byte   $0E,$0E,$10,$13,$13,$13,$13,$13,$13,$13,$13,$13,$12,$12,$11,$10
         .byte   $10,$10,$10,$10,$10,$10,$10,$11,$11,$12,$12,$12,$12,$12,$12,$12
         .byte   $12,$12,$11,$11,$10,$0F,$0F,$0E,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D
@@ -1225,8 +1254,6 @@ D2F00:  .byte   $0E,$0E,$10,$13,$13,$13,$13,$13,$13,$13,$13,$13,$12,$12,$11,$10
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
-; ----------------------------------------------------------------------------
-
 D3000:  .byte   $49,$49,$46,$43,$43,$43,$43,$43,$43,$43,$43,$3D,$37,$31,$2B,$25
         .byte   $25,$25,$25,$25,$25,$24,$23,$21,$20,$1E,$1E,$1E,$1E,$1E,$1E,$1E
         .byte   $1E,$1E,$1E,$1E,$1E,$1E,$1E,$1E,$1D,$1D,$1D,$1D,$1D,$1D,$1D,$1D
@@ -1243,8 +1270,6 @@ D3000:  .byte   $49,$49,$46,$43,$43,$43,$43,$43,$43,$43,$43,$3D,$37,$31,$2B,$25
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-
-; ----------------------------------------------------------------------------
 
 D3100:  .byte   $5D,$5D,$5C,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5E,$62,$66,$6A,$6E
         .byte   $6E,$6E,$6E,$6E,$6E,$6A,$66,$61,$5D,$58,$58,$58,$58,$58,$58,$58
