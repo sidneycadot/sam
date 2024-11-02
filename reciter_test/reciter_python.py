@@ -369,7 +369,6 @@ def main():
     print(f"Python Reciter class tests: success = {success}, failure = {failure}.")
     print()
 
-    print(reciter_rules_dictionary)
 
 if __name__ == "__main__":
     main()
