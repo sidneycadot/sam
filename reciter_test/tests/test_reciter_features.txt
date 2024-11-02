@@ -1,0 +1,28 @@
+Just a regular sentence.
+I see Tom, Dick, and Harry separated by some commas.
+A "quoted text" in a sentence.
+The # sign is also called the hash sign.
+At a price of 5$ that is a bargain.
+Tax the 1% richest people.
+The three letters A, B & C.
+Let's use a possessive quote and some 'scare quotes' here.
+The * looks like a star.
+Say 1 + 1 = 2.
+Pi is approximately equal to 3.14.
+It is good/bad to have options.
+The decimal digits are 0, 1, 2, 3, 4, 5, 6, 7, 8 and 9.
+The 1st president of the United States was George Washington.
+The 2nd president of the United States was John Adams.
+The 3rd president of the United States was Thomas Jefferson.
+The 5th president of the United States was James Monroe.
+The 8th president of the United States was Martin van Buren.
+The 10th president of the United States was John Tyler.
+The gut ends in a colon: that is a fact.
+There's more to come; a semicolon.
+If N < 3, and N > 1, it follows that N = 2.
+This sentence ends with an exclamation mark!
+Is this sentence a question?
+The @ sign is sometimes called a rose.
+The ^ sign is used for either exponentiation or the exclusive OR operator.
+The alphabet starts with A B C D E F G H I J K L M.
+And then on to N O P Q R S T U V W X Y Z.
