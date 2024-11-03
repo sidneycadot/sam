@@ -1,5 +1,5 @@
 
-TEST_INPUT_FILES=$(wildcard tests/test_*.txt)
+TEST_INPUT_FILES=$(wildcard tests/*.txt)
 
 TEST_OUTPUT_FILES=$(TEST_INPUT_FILES:%.txt=%.out)
 
@@ -25,4 +25,5 @@ reciter_test : reciter_test.c reciter_modded.s
 	cl65 -t sim6502 $^ -o $@
 
 clean :
-	$(RM) *.o reciter_test $(TEST_OUTPUT_FILES) tests/MD5SUM
+	$(RM) *.o reciter_test
+
