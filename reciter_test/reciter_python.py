@@ -2,6 +2,8 @@
 
 """This is a Python re-implementation of the "SAM Reciter" program, which translates English text to SAM-style phonemes represented in ASCII."""
 
+from __future__ import annotations
+
 import argparse
 import re
 from typing import Optional, NamedTuple
@@ -53,40 +55,67 @@ class ReciterCharacterClass:
     del SPACE, SINGLE_QUOTE, BACKSLASH
 
 
-class ReciterRewriteRule(NamedTuple):
-    """This class represents a single SAM Reciter rewrite rule.
+class StringScanner:
+    """The anstract base class for the ForwardStringScanner and BackwardStringScanner."""
 
-    SAM Reciter rewrite rules are written in the SAM reciter assembly code as:
 
-        prefix(stem)suffix=replacement
+class ForwardStringScanner(StringScanner):
 
-    Rules are represented in the same way in the rule file that we read in Python, with the
-    added feature that the rule file allows underscore ('_') characters to represent a space wildcard,
-    in addition to the default space (' ') character used in the assembly version.
+    def __init__(self, s: str, offset: int):
+        if not (0 <= offset <= len(s)):
+            raise RuntimeError()
+        self.s = s
+        self.offset = offset
 
-    The rewrite rules are used as follows by the SAM Reciter:
+    def peek(self, count: int) -> Optional[str]:
+        a = self.offset
+        b = self.offset + count
+        return self.s[a:b] if b <= len(self.s) else None
 
-    First, a determination is made if the rule matches. This is a three-step process; if any match step fails,
-    the rule is considered a non-match.
+    def drop(self, count: int) -> ForwardStringScanner:
+        b = min(self.offset + count, len(self.s))
+        return ForwardStringScanner(self.s, b)
 
-    (1) Match the rewrite rule's 'stem' at the current position in the source text.
-        This match must be verbatim; characters, including symbols, are matched literally.
 
-    (2) Match the rewrite rule's 'prefix', going left from the current position in the source text.
-        The prefix can consists of the letters A-Z, and a number of wildcard symbols, described below.
+class BackwardStringScanner:
 
-    (3) Match the rewrite rule's 'suffix', going right from the character following the stem in the source text.
-        Note that we're sure that the stem is present in the source text, as it was matched during step (1).
-        The suffix can consists of the letters A-Z and a number of wildcard symbols, described below.
+    def __init__(self, s: str, offset: int):
+        if not (0 <= offset <= len(s)):
+            raise RuntimeError()
+        self.s = s
+        self.offset = offset
 
-    If all three steps indicate a match, the rule is considered to match. In that case, the rewrite rule's
-    'replacement' string is emitted into the phoneme buffer for subsequent vocalisation.
+    def peek(self, count: int) -> Optional[str]:
+        a = self.offset - count
+        b = self.offset
+        return self.s[a:b] if a >= 0 else None
 
-    Prefix and suffix wildcards
-    ---------------------------
+    def drop(self, count: int) -> BackwardStringScanner:
+        a = max(self.offset - count, 0)
+        return BackwardStringScanner(self.s, a)
 
-    The 'prefix' and 'suffix' fields can contain a number of so-called wildcard symbols that can match
-    with certain strings in the source text. These are described below.
+
+def match_exact(pattern_scanner: StringScanner, source_scanner: StringScanner) -> bool:
+    """Perform an exact pattern match."""
+
+    while True:
+
+        pattern_character = pattern_scanner.peek(1)
+        if pattern_character is None:
+            return True
+
+        source_character = source_scanner.peek(1)
+        if pattern_character != source_character:
+            return False
+    
+        pattern_scanner = pattern_scanner.drop(1)
+        source_scanner = source_scanner.drop(1)
+
+
+def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: StringScanner) -> bool:
+    """Perform a wildcard pattern match according to the pattern language supported by the SAM Reciter.
+
+    The following wildcards are supported:
 
     * Wildcard ' ':
 
@@ -141,105 +170,140 @@ class ReciterRewriteRule(NamedTuple):
       (TBW)
 
       Note: in SAM Reciter, this wildcard is only implemented for suffixes, not for prefixes.
+
     """
 
-    prefix: str
-    stem: str
-    suffix: str
-    replacement: str
+    pattern_character = pattern_scanner.peek(1)
+    if pattern_character is None:
+        # The pattern is fully matched.
+        return True
 
-    def match(self, s: str, s_index: int) -> bool:
+    if pattern_character in ReciterCharacterClass.letters_or_single_quote:
+        # Try to match a literal source character to the pattern character.
+        source_character = source_scanner.peek(1)
+        return (pattern_character == source_character) and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-        return self._match_stem(s, s_index) and self._match_prefix(s, s_index) and self._match_suffix(s, s_index)
+    if pattern_character == ' ':
+        source_character = source_scanner.peek(1)
+        return source_character not in ReciterCharacterClass.letters_or_single_quote and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-    def _match_stem(self, s: str, s_index: int) -> bool:
-        return ReciterRewriteRule._match_exact(s, s_index, self.stem, 0, +1)
+    if pattern_character == '#':
+        source_character = source_scanner.peek(1)
+        return source_character in ReciterCharacterClass.vowels and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-    def _match_prefix(self, s: str, s_index: int) -> bool:
-        return ReciterRewriteRule._match_pattern(s, s_index - 1, self.prefix, len(self.prefix) - 1, -1)
+    if pattern_character == '.':
+        source_character = source_scanner.peek(1)
+        return source_character in ('B', 'D', 'G', 'J', 'L', 'M', 'N', 'R', 'V', 'W', 'Z') and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-    def _match_suffix(self, s: str, s_index: int) -> bool:
-        return ReciterRewriteRule._match_pattern(s, s_index + len(self.stem), self.suffix, 0, +1)
+    if pattern_character == '&':
+        # A '&' character matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
+        source_duplet = source_scanner.peek(2)
+        if source_duplet in {"CH", "SH"}:
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        source_character = source_scanner.peek(1)
+        return source_character in {'C', 'G', 'J', 'S', 'X', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-    @staticmethod
-    def _match_exact(s: str, s_index: int, p: str, p_index: int, direction: int) -> bool:
-        if not (0 <= p_index < len(p)):
-            # No pattern characters left to match.
-            return True
+    if pattern_character == '@':
+        # A '&' character matches any of the letters {D, J, L, N, R, S, T, or Z}, or a two-letter combination {TH, CH, or SH}.
+        source_duplet = source_scanner.peek(2)
+        if source_duplet in {"TH", "CH", "SH"}:
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        source_character = source_scanner.peek(1)
+        return source_character in {'D', 'J', 'L', 'N', 'R', 'S', 'T', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-        pattern_character = p[p_index]
+    if pattern_character == '^':
+        source_character = source_scanner.peek(1)
+        return source_character in ReciterCharacterClass.consonants and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-        if not (0 <= s_index < len(s)):
-            return False
-        source_character = s[s_index]
-        return source_character == pattern_character and ReciterRewriteRule._match_exact(s, s_index + direction, p, p_index + direction, direction)
+    if pattern_character == '+':
+        # A '+' character matches any of the letters {E, I, Y}.
+        source_character = source_scanner.peek(1)
+        return source_character in {'E', 'I', 'Y'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-    @staticmethod
-    def _match_pattern(s: str, s_index: int, p: str, p_index: int, direction: int) -> bool:
-        if not (0 <= p_index < len(p)):
-            # No pattern characters left to match.
-            return True
+    if pattern_character == ':':
+        # A '+' character matches any number of consonants.
+        source_character = source_scanner.peek(1)
+        if source_character in ReciterCharacterClass.consonants:
+            return match_wildcard_pattern(pattern_scanner, source_scanner.drop(1))
 
-        pattern_character = p[p_index]
+        return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner)
 
-        if pattern_character not in ReciterCharacterClass.letters_or_single_quote:
-            if pattern_character == ' ':
-                if not (0 <= s_index < len(s)):
-                    return True  # The beginning and end of the string also match 'space'.
-                source_character = s[s_index]
-                return source_character not in ReciterCharacterClass.letters_or_single_quote and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
-            elif pattern_character == '#':
-                if not (0 <= s_index < len(s)):
-                    return False
-                source_character = s[s_index]
-                return source_character in ReciterCharacterClass.vowels and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
-            elif pattern_character == '.':
-                if not (0 <= s_index < len(s)):
-                    return False
-                source_character = s[s_index]
-                return source_character in "BDGJLMNRVWZ" and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
-            elif pattern_character == '&':
-                # A '&' character in the rule matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
-                if not (0 <= s_index < len(s)):
-                    return False
-                source_character = s[s_index]
-                return False
-            elif pattern_character == '@':
-                if not (0 <= s_index < len(s)):
-                    return False
-                source_character = s[s_index]
-                if source_character in "DJLNRSTZ":
-                    return ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
-                # TODO: two-character combo's.
-                return False
-            elif pattern_character == '^':
-                if not (0 <= s_index < len(s)):
-                    return False
-                source_character = s[s_index]
-                return source_character in ReciterCharacterClass.consonants and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
-            elif pattern_character == '+':
-                if not (0 <= s_index < len(s)):
-                    return False
-                source_character = s[s_index]
-                return source_character in "EIY" and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
-            elif pattern_character == ':':
-                if not (0 <= s_index < len(s)):
-                    return True
-                source_character = s[s_index]
-                if source_character in ReciterCharacterClass.consonants:
-                    return ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index, direction)
-                else:
-                    return ReciterRewriteRule._match_pattern(s, s_index, p, p_index + direction, direction)
-            elif pattern_character == '%':
-                return False
-            else:
-                raise RuntimeError()
-        else:
-            # Try to match a literal source character to the pattern character.
-            if not (0 <= s_index < len(s)):
-                return False
-            source_character = s[s_index]
-            return source_character == pattern_character and ReciterRewriteRule._match_pattern(s, s_index + direction, p, p_index + direction, direction)
+    if pattern_character == '%':
+        peek = source_scanner.peek(4)
+        if peek == "EFUL":
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(4))
+        peek = source_scanner.peek(3)
+        if peek in {"ELY", "ING"}:
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(3))
+        peek = source_scanner.peek(2)
+        if peek in {"ER", "ES", "ED"}:
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+
+        if peek is not None and peek[0] == "E" and peek[1] not in ReciterCharacterClass.letters_or_single_quote:
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+
+        return False
+
+
+    raise RuntimeError(f"Bad wildcard character: {pattern_character|r}")
+
+
+
+class ReciterRewriteRule:
+
+    """This class represents a single SAM Reciter rewrite rule.
+
+    SAM Reciter rewrite rules are written in the SAM reciter assembly code as:
+
+        prefix(stem)suffix=replacement
+
+    Rewrite rules are represented in the same way in the rule file that we read in Python, with the
+    added feature that the rule file allows underscore ('_') characters to represent a space wildcard,
+    in addition to the default space (' ') character used in the assembly version.
+
+    The rewrite rules are used as follows by the SAM Reciter:
+
+    First, a determination is made if the rule matches. This is a three-step process; if any match step fails,
+    the rule is considered a non-match.
+
+    (1) Match the rewrite rule's 'stem' at the current position in the source text.
+        This match must be verbatim; characters, including symbols, are matched literally.
+
+    (2) Match the rewrite rule's 'prefix', going left from the current position in the source text.
+        The prefix can consists of the letters A-Z and a number of wildcard symbols.
+
+    (3) Match the rewrite rule's 'suffix', going right from the character following the stem in the source text.
+        Note that we're sure that the stem is present in the source text, as it was matched during step (1).
+        The suffix can consists of the letters A-Z and a number of wildcard symbols.
+
+    If all three steps indicate a match, the rule is considered to match. In that case, the rewrite rule's
+    'replacement' string is emitted into the phoneme buffer for subsequent vocalisation.
+    """
+
+    def __init__(self, prefix: str, stem: str, suffix: str, replacement: str):
+        self.prefix = prefix
+        self.stem = stem
+        self.suffix = suffix
+        self.replacement = replacement
+
+    def match(self, source: str, source_offset: int) -> bool:
+        """Determine if the rule matches at a certain offset in the source file."""
+        return self._match_stem(source, source_offset) and self._match_prefix(source, source_offset) and self._match_suffix(source, source_offset)
+
+    def _match_stem(self, source: str, source_offset: int) -> bool:
+        pattern_scanner = ForwardStringScanner(self.stem, 0)
+        source_scanner = ForwardStringScanner(source, source_offset)
+        return match_exact(pattern_scanner, source_scanner)
+
+    def _match_prefix(self, source: str, source_offset: int) -> bool:
+        pattern_scanner = BackwardStringScanner(self.prefix, len(self.prefix))
+        source_scanner = BackwardStringScanner(source, source_offset)
+        return match_wildcard_pattern(pattern_scanner, source_scanner)
+
+    def _match_suffix(self, source: str, source_offset: int) -> bool:
+        pattern_scanner = ForwardStringScanner(self.suffix, 0)
+        source_scanner = ForwardStringScanner(source, source_offset + len(self.stem))
+        return match_wildcard_pattern(pattern_scanner, source_scanner)
 
 
 class Reciter:
@@ -288,15 +352,12 @@ class Reciter:
         else:
             rule_list = self.rules_dictionary[source_character]
 
-        if rule_list is None:
-            raise RuntimeError()
-
         # We will now try all rules in the rule list; we accept the first one that succeeds.
         for rule in rule_list:
             if rule.match(source, source_index):
                 return (len(rule.stem), rule.replacement)
 
-        # The rules are exhausted without a match. We should never get here.
+        # The rules were all tried, without a match. If the rules are well-written, this cannot happen.
         raise RuntimeError(f"No rule matched (source = {source!r} source_index = {source_index}).")
 
 
