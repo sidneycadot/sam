@@ -61,8 +61,6 @@ class StringScanner:
 
 class ForwardStringScanner(StringScanner):
 
-    direction = +1
-
     def __init__(self, s: str, offset: int):
         if not (0 <= offset <= len(s)):
             raise RuntimeError()
@@ -80,8 +78,6 @@ class ForwardStringScanner(StringScanner):
 
 
 class BackwardStringScanner:
-
-    direction = -1
 
     def __init__(self, s: str, offset: int):
         if not (0 <= offset <= len(s)):
@@ -143,19 +139,23 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
       This wildcard matches the single characters C, G, J, S, X, or Z, as well as the two-character combinations "CH", or "SH".
 
-      That is the intention anyway. In SAM Reciter, this works in the case of prefix matching, but the implementation for suffix matching
-      of the '&' wildcard is buggy, so in the suffix it actually matches the two-character combinations "HC", or "HS".
+      That is the intention anyway. But SAM reciter has bugs in its matching code for this wildcard:
 
-      Fortunately, in the standard rule-set of SAM Reciter, the '&' wildcard is never used in rule suffixes. Phew.
+      * In the SUFFIX implementation, it actually matches the two-character combinations "HC", or "HS" instead of "CH and "SH".
+        However, there are no rules that use the '&' wildcard in the suffix pattern, so this bug is never triggered.
 
     * Wildcard '@':
 
       This wildcard matches the single characters D, J, L, N, R, S, T, or Z, as well as the two-character combinations "TH", "CH", or "SH".
 
-      That is the intention anyway. In SAM Reciter, this works in the case of prefix matching, but the implementation for suffix matching
-      of the '@' wildcard is buggy, so in the suffix it actually matches the two-character combinations "HT", "HC", or "HS".
+      That is the intention anyway. But SAM reciter has bugs in its matching code for this wildcard:
 
-      Fortunately, in the standard rule-set of SAM Reciter, the '@' wildcard is never used in rule suffixes. Phew.
+      * In both the PREFIX and the SUFFIX version, the examination of the character after the 'H' is done on the same character.
+        So two-letter matches cannot occur for that reason.
+      * In the SUFFIX version, the attempted code would match "HT", "HC", and "HS" if it weren't for the previous bug.
+        However, there are no rules that use the '&' wildcard in the suffix pattern, so this bug is never triggered.
+
+      The net result is that, for both PREFIX and SUFFIX matching, only the single-character matches actually work.
 
     * Wildcard '^':
 
@@ -201,52 +201,37 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     if pattern_character == '&':
 
-        # TODO: we want to replicate what actually happens in the code.
-        # This needs a thorough investigation.
         # We only need to look at the "prefix" (backward scanning) cases, as only those are used with the English ruleset.
 
         # A '&' character matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
+        # Order matters here. We should really try to match the two-letter combinations first, but we follow here whsat the assembly does.
 
-        source_duplet = source_scanner.peek(2)
-        if source_scanner.direction > 0:
-            # --- THE SUFFIX (FORWARD SCAN CASE) IS NOT USED WITH THE ENGLISH RULESET ---
-            raise RuntimeError("The '&' wildcard is not used in the suffix pattern.")
-            if source_duplet in {"CH", "SH"}:
-                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
-        else:
-            # --- THE PREFIX (BACKWARD SCAN CASE) *IS* USED WITH THE ENGLISH RULESET ---
-            if source_duplet in {"CH", "SH"}:
-            #if source_duplet in {"HC", "HS"}:
-                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        # Check for one-letter matches.
+        if source_scanner.peek(1) in {'C', 'G', 'J', 'S', 'X', 'Z'}:
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-        source_character = source_scanner.peek(1)
-        if source_character in {'C', 'G', 'J', 'S', 'X', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1)):
-            return True
+        # Check for two-letter matches.
+        if source_scanner.peek(2) in {"CH", "SH"}:
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
 
         return False
 
     if pattern_character == '@':
         # A '&' character matches any of the letters {D, J, L, N, R, S, T, or Z}, or a two-letter combination {TH, CH, or SH}.
+        #
+        # Order matters here. We should really try to match the two-letter combinations first,
+        # but we follow here whsat the assembly does (or tries to do).
 
-        # TODO: we want to replicate what actually happens in the code.
-        # This needs a thorough investigation.
-        # We only need to look at the "prefix" (backward scanning) cases, as only those are used with the English ruleset.
+        # Check for one-letter matches.
+        if source_scanner.peek(1) in {'D', 'J', 'L', 'N', 'R', 'S', 'T', 'Z'}:
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
-        source_duplet = source_scanner.peek(2)
-        if source_scanner.direction > 0:
-            # --- THE SUFFIX (FORWARD SCAN CASE) IS NOT USED WITH THE ENGLISH RULESET ---
-            raise RuntimeError("The '@' wildcard is not used in the suffix pattern.")
-            if source_duplet in {"TH", "CH", "SH"}:
-                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
-        else:
-            # --- THE PREFIX (BACKWARD SCAN CASE) *IS* USED WITH THE ENGLISH RULESET ---
-            #if source_duplet in {"TH", "CH", "SH"}:
-            if source_duplet in {"HT", "HC", "HS"}:
-                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        # *** Replicate bug in assembly code implementation of MATCH_PREFIX_WILDCARD_AT_SIGN ***
+        return False  # Remove this return to enable checking for TH/CH/SH.
 
-        source_character = source_scanner.peek(1)
-        if source_character in {'D', 'J', 'L', 'N', 'R', 'S', 'T', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1)):
-            return True
+        # Intended functionality: check for two-letter matches.
+        if source_scanner.peek(2) in {"TH", "CH", "SH"}:
+            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
 
         return False
 

@@ -627,12 +627,12 @@ MATCH_PREFIX_WILDCARD_AT_SIGN:
         beq     @1                              ;
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
-@1:     cmp     #'T'                            ;
-        beq     MATCH_PREFIX_SUCCESS_4          ; Match: "TH".
+@1:     cmp     #'T'                            ; *** BUG *** Forgot to go to the next letter, yikes!
+        beq     MATCH_PREFIX_SUCCESS_4          ; All comparisons will fail.
         cmp     #'C'                            ;
-        beq     MATCH_PREFIX_SUCCESS_4          ; Match: "CH".
+        beq     MATCH_PREFIX_SUCCESS_4          ;
         cmp     #'S'                            ;
-        beq     MATCH_PREFIX_SUCCESS_4          ; Match: "SH".
+        beq     MATCH_PREFIX_SUCCESS_4          ;
         jmp     TRY_NEXT_RULE                   ; Mismatch.
 
 ; ----------------------------------------------------------------------------
