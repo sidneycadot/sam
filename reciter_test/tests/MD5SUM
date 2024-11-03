@@ -1,4 +1,4 @@
-5f8f92d7de96370504761098672dafec  test_hamlet.out
-43646a7c514497048f7cfbd4e4ffb55d  test_reciter_features.out
-3d26a9d4e19e2c9ac7df4dc10634fa08  test_wordlist_long.out
-8eb6dcf7005a62c4bd73155a589c86ce  test_wordlist_short.out
+5f8f92d7de96370504761098672dafec  hamlet.out
+43646a7c514497048f7cfbd4e4ffb55d  reciter_features.out
+3d26a9d4e19e2c9ac7df4dc10634fa08  wordlist_long.out
+8eb6dcf7005a62c4bd73155a589c86ce  wordlist_short.out
