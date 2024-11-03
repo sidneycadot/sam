@@ -61,6 +61,8 @@ class StringScanner:
 
 class ForwardStringScanner(StringScanner):
 
+    direction = +1
+
     def __init__(self, s: str, offset: int):
         if not (0 <= offset <= len(s)):
             raise RuntimeError()
@@ -78,6 +80,8 @@ class ForwardStringScanner(StringScanner):
 
 
 class BackwardStringScanner:
+
+    direction = -1
 
     def __init__(self, s: str, offset: int):
         if not (0 <= offset <= len(s)):
@@ -107,7 +111,7 @@ def match_exact(pattern_scanner: StringScanner, source_scanner: StringScanner) -
         source_character = source_scanner.peek(1)
         if pattern_character != source_character:
             return False
-    
+
         pattern_scanner = pattern_scanner.drop(1)
         source_scanner = source_scanner.drop(1)
 
@@ -196,20 +200,55 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
         return source_character in ('B', 'D', 'G', 'J', 'L', 'M', 'N', 'R', 'V', 'W', 'Z') and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
     if pattern_character == '&':
+
+        # TODO: we want to replicate what actually happens in the code.
+        # This needs a thorough investigation.
+        # We only need to look at the "prefix" (backward scanning) cases, as only those are used with the English ruleset.
+
         # A '&' character matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
+
         source_duplet = source_scanner.peek(2)
-        if source_duplet in {"CH", "SH"}:
-            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        if source_scanner.direction > 0:
+            # --- THE SUFFIX (FORWARD SCAN CASE) IS NOT USED WITH THE ENGLISH RULESET ---
+            raise RuntimeError("The '&' wildcard is not used in the suffix pattern.")
+            if source_duplet in {"CH", "SH"}:
+                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        else:
+            # --- THE PREFIX (BACKWARD SCAN CASE) *IS* USED WITH THE ENGLISH RULESET ---
+            if source_duplet in {"CH", "SH"}:
+            #if source_duplet in {"HC", "HS"}:
+                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+
         source_character = source_scanner.peek(1)
-        return source_character in {'C', 'G', 'J', 'S', 'X', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
+        if source_character in {'C', 'G', 'J', 'S', 'X', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1)):
+            return True
+
+        return False
 
     if pattern_character == '@':
         # A '&' character matches any of the letters {D, J, L, N, R, S, T, or Z}, or a two-letter combination {TH, CH, or SH}.
+
+        # TODO: we want to replicate what actually happens in the code.
+        # This needs a thorough investigation.
+        # We only need to look at the "prefix" (backward scanning) cases, as only those are used with the English ruleset.
+
         source_duplet = source_scanner.peek(2)
-        if source_duplet in {"TH", "CH", "SH"}:
-            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        if source_scanner.direction > 0:
+            # --- THE SUFFIX (FORWARD SCAN CASE) IS NOT USED WITH THE ENGLISH RULESET ---
+            raise RuntimeError("The '@' wildcard is not used in the suffix pattern.")
+            if source_duplet in {"TH", "CH", "SH"}:
+                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        else:
+            # --- THE PREFIX (BACKWARD SCAN CASE) *IS* USED WITH THE ENGLISH RULESET ---
+            #if source_duplet in {"TH", "CH", "SH"}:
+            if source_duplet in {"HT", "HC", "HS"}:
+                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+
         source_character = source_scanner.peek(1)
-        return source_character in {'D', 'J', 'L', 'N', 'R', 'S', 'T', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
+        if source_character in {'D', 'J', 'L', 'N', 'R', 'S', 'T', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1)):
+            return True
+
+        return False
 
     if pattern_character == '^':
         source_character = source_scanner.peek(1)
@@ -239,13 +278,18 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
         if peek in {"ER", "ES", "ED"}:
             return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
 
-        if peek is not None and peek[0] == "E" and peek[1] not in ReciterCharacterClass.letters_or_single_quote:
-            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        peek = source_scanner.peek(1)
+        if peek == "E":
+            peek = source_scanner.peek(2)
+            if peek is None:
+                return True
+            if peek[1] not in ReciterCharacterClass.letters_or_single_quote:
+                return True
 
         return False
 
 
-    raise RuntimeError(f"Bad wildcard character: {pattern_character|r}")
+    raise RuntimeError(f"Bad wildcard character: {pattern_character!r}")
 
 
 
@@ -258,8 +302,7 @@ class ReciterRewriteRule:
         prefix(stem)suffix=replacement
 
     Rewrite rules are represented in the same way in the rule file that we read in Python, with the
-    added feature that the rule file allows underscore ('_') characters to represent a space wildcard,
-    in addition to the default space (' ') character used in the assembly version.
+    added feature that the rule file allows underscore ('_') characters to represent a space.
 
     The rewrite rules are used as follows by the SAM Reciter:
 
@@ -286,21 +329,27 @@ class ReciterRewriteRule:
         self.suffix = suffix
         self.replacement = replacement
 
+    def __repr__(self) -> str:
+        return f"ReciterRewriteRule(prefix={self.prefix!r}, stem={self.stem!r}, suffix={self.suffix!r}, replacement={self.replacement!r})"
+
     def match(self, source: str, source_offset: int) -> bool:
         """Determine if the rule matches at a certain offset in the source file."""
         return self._match_stem(source, source_offset) and self._match_prefix(source, source_offset) and self._match_suffix(source, source_offset)
 
     def _match_stem(self, source: str, source_offset: int) -> bool:
+        #print("_match_stem")
         pattern_scanner = ForwardStringScanner(self.stem, 0)
         source_scanner = ForwardStringScanner(source, source_offset)
         return match_exact(pattern_scanner, source_scanner)
 
     def _match_prefix(self, source: str, source_offset: int) -> bool:
+        #print("_match_prefix")
         pattern_scanner = BackwardStringScanner(self.prefix, len(self.prefix))
         source_scanner = BackwardStringScanner(source, source_offset)
         return match_wildcard_pattern(pattern_scanner, source_scanner)
 
     def _match_suffix(self, source: str, source_offset: int) -> bool:
+        #print("_match_suffix")
         pattern_scanner = ForwardStringScanner(self.suffix, 0)
         source_scanner = ForwardStringScanner(source, source_offset + len(self.stem))
         return match_wildcard_pattern(pattern_scanner, source_scanner)
@@ -435,7 +484,8 @@ def main():
     testcase_regexp = re.compile("{(.*)} -> {(.*)}")
     for (testcase_index, testcase) in enumerate(testcases, 1):
         match = testcase_regexp.fullmatch(testcase)
-        assert match is not None
+        if match is None:
+            raise RuntimeError(f"Bad testcase: {testcase!r}.")
         reciter_input = match.group(1)
         reciter_reference_output = match.group(2)
         reciter_test_output = reciter(reciter_input)
