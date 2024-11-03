@@ -734,7 +734,7 @@ MATCH_SUFFIX_WILDCARD_PERCENT:
         lda     RECITER_BUFFER,x                ;
         cmp     #'R'                            ;
 
-        bne     @continue
+        bne     @continue                       ;
 
 ; ----------------------------------------------------------------------------
 
