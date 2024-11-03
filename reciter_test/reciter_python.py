@@ -61,6 +61,8 @@ class StringScanner:
 
 class ForwardStringScanner(StringScanner):
 
+    direction = +1
+
     def __init__(self, s: str, offset: int):
         if not (0 <= offset <= len(s)):
             raise RuntimeError()
@@ -78,6 +80,8 @@ class ForwardStringScanner(StringScanner):
 
 
 class BackwardStringScanner:
+
+    direction = -1
 
     def __init__(self, s: str, offset: int):
         if not (0 <= offset <= len(s)):
@@ -196,20 +200,55 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
         return source_character in ('B', 'D', 'G', 'J', 'L', 'M', 'N', 'R', 'V', 'W', 'Z') and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
 
     if pattern_character == '&':
+
+        # TODO: we want to replicate what actually happens in the code.
+        # This needs a thorough investigation.
+        # We only need to look at the "prefix" (backward scanning) cases, as only those are used with the English ruleset.
+
         # A '&' character matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
+
         source_duplet = source_scanner.peek(2)
-        if source_duplet in {"CH", "SH"}:
-            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        if source_scanner.direction > 0:
+            # --- THE SUFFIX (FORWARD SCAN CASE) IS NOT USED WITH THE ENGLISH RULESET ---
+            raise RuntimeError("The '&' wildcard is not used in the suffix pattern.")
+            if source_duplet in {"CH", "SH"}:
+                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        else:
+            # --- THE PREFIX (BACKWARD SCAN CASE) *IS* USED WITH THE ENGLISH RULESET ---
+            if source_duplet in {"CH", "SH"}:
+            #if source_duplet in {"HC", "HS"}:
+                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+
         source_character = source_scanner.peek(1)
-        return source_character in {'C', 'G', 'J', 'S', 'X', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
+        if source_character in {'C', 'G', 'J', 'S', 'X', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1)):
+            return True
+
+        return False
 
     if pattern_character == '@':
         # A '&' character matches any of the letters {D, J, L, N, R, S, T, or Z}, or a two-letter combination {TH, CH, or SH}.
+
+        # TODO: we want to replicate what actually happens in the code.
+        # This needs a thorough investigation.
+        # We only need to look at the "prefix" (backward scanning) cases, as only those are used with the English ruleset.
+
         source_duplet = source_scanner.peek(2)
-        if source_duplet in {"TH", "CH", "SH"}:
-            return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        if source_scanner.direction > 0:
+            # --- THE SUFFIX (FORWARD SCAN CASE) IS NOT USED WITH THE ENGLISH RULESET ---
+            raise RuntimeError("The '@' wildcard is not used in the suffix pattern.")
+            if source_duplet in {"TH", "CH", "SH"}:
+                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+        else:
+            # --- THE PREFIX (BACKWARD SCAN CASE) *IS* USED WITH THE ENGLISH RULESET ---
+            #if source_duplet in {"TH", "CH", "SH"}:
+            if source_duplet in {"HT", "HC", "HS"}:
+                return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(2))
+
         source_character = source_scanner.peek(1)
-        return source_character in {'D', 'J', 'L', 'N', 'R', 'S', 'T', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1))
+        if source_character in {'D', 'J', 'L', 'N', 'R', 'S', 'T', 'Z'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1)):
+            return True
+
+        return False
 
     if pattern_character == '^':
         source_character = source_scanner.peek(1)
