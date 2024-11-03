@@ -61,8 +61,8 @@ class ReciterRewriteRule(NamedTuple):
         prefix(stem)suffix=replacement
 
     Rules are represented in the same way in the rule file that we read in Python, with the
-    added feature that the rule file allows underscore ('_') characters to represent space placeholder,
-    in addition to the default space (' ') characters.
+    added feature that the rule file allows underscore ('_') characters to represent a space wildcard,
+    in addition to the default space (' ') character used in the assembly version.
 
     The rewrite rules are used as follows by the SAM Reciter:
 
@@ -73,72 +73,74 @@ class ReciterRewriteRule(NamedTuple):
         This match must be verbatim; characters, including symbols, are matched literally.
 
     (2) Match the rewrite rule's 'prefix', going left from the current position in the source text.
-        The prefix can consists of the letters A-Z, and a number of placeholder symbols, described below.
+        The prefix can consists of the letters A-Z, and a number of wildcard symbols, described below.
 
     (3) Match the rewrite rule's 'suffix', going right from the character following the stem in the source text.
         Note that we're sure that the stem is present in the source text, as it was matched during step (1).
-        The suffix can consists of the letters A-Z and a number of placeholder symbols, described below.
+        The suffix can consists of the letters A-Z and a number of wildcard symbols, described below.
 
     If all three steps indicate a match, the rule is considered to match. In that case, the rewrite rule's
-    'replacement' string is emitted into the phoneme buffer for vocalisation.
+    'replacement' string is emitted into the phoneme buffer for subsequent vocalisation.
 
-    Prefix and suffix patterns
-    --------------------------
+    Prefix and suffix wildcards
+    ---------------------------
 
-    The 'prefix' and 'suffix' fields can contain a number of so-called placeholder characters that can match
+    The 'prefix' and 'suffix' fields can contain a number of so-called wildcard symbols that can match
     with certain strings in the source text. These are described below.
 
-    * Placeholder ' ':
+    * Wildcard ' ':
 
-      This placeholder matches a small pause in the vocalisation -- a "space".
+      This wildcard matches a small pause in the vocalisation -- a "space".
 
       Any character that is not a letter A-Z or a single quote matches this.
       Single quotes are assumed to also imply that the character is preceded by a letter, e.g. "haven't" or "brother's",
       so those trailing 't' and 's' characters at the end are not preceded by a space, for example.
 
-    * Placeholder '#':
+      The beginning or end of the source text is also considered a match.
 
-      This placeholder matches a single vowel, i.e., any of the single letters A, E, I, O, U, or Y.
+    * Wildcard '#':
 
-    * Placeholder '.':
+      This wildcard matches a single vowel, i.e., any of the single letters A, E, I, O, U, or Y.
 
-      This placeholder matches a subset of the consonants, specifically, any of the single letters B, D, G, J, L, M, N, R, V, W, or Z.
+    * Wildcard '.':
 
-    * Placeholder '&':
+      This wildcard matches a subset of the consonants, specifically, any of the single letters B, D, G, J, L, M, N, R, V, W, or Z.
 
-      This placeholder matches the single characters C, G, J, S, X, or Z, as well as the two-character combinations "CH", or "SH".
+    * Wildcard  '&':
 
-      That is the intention anyway. In SAM Reciter, this works in the case of prefix matching, but the implementation for suffix matching
-      of the '&' placeholder is buggy, so in the suffix it actually matches the two-character combinations "HC", or "HS".
-
-      Fortunately, in the standard rule-set of SAM Reciter, the '&' placeholder is never used in rule suffixes. Phew.
-
-    * Placeholder '@':
-
-      This placeholder matches the single characters D, J, L, N, R, S, T, or Z, as well as the two-character combinations "TH", "CH", or "SH".
+      This wildcard matches the single characters C, G, J, S, X, or Z, as well as the two-character combinations "CH", or "SH".
 
       That is the intention anyway. In SAM Reciter, this works in the case of prefix matching, but the implementation for suffix matching
-      of the '@' placeholder is buggy, so in the suffix it actually matches the two-character combinations "HT", "HC", or "HS".
+      of the '&' wildcard is buggy, so in the suffix it actually matches the two-character combinations "HC", or "HS".
 
-      Fortunately, in the standard rule-set of SAM Reciter, the '@' placeholder is never used in rule suffixes. Phew.
+      Fortunately, in the standard rule-set of SAM Reciter, the '&' wildcard is never used in rule suffixes. Phew.
 
-    * Placeholder '^':
+    * Wildcard '@':
 
-      This placeholder matches a single consonant, i.e., any of the single letters B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, W, X, or Z.
+      This wildcard matches the single characters D, J, L, N, R, S, T, or Z, as well as the two-character combinations "TH", "CH", or "SH".
 
-    * Placeholder '+':
+      That is the intention anyway. In SAM Reciter, this works in the case of prefix matching, but the implementation for suffix matching
+      of the '@' wildcard is buggy, so in the suffix it actually matches the two-character combinations "HT", "HC", or "HS".
 
-      This placeholder matches a subset of the vowels, specifically, any of the single letters E, I, or Y.
+      Fortunately, in the standard rule-set of SAM Reciter, the '@' wildcard is never used in rule suffixes. Phew.
 
-    * Placeholder ':':
+    * Wildcard '^':
+
+      This wildcard matches a single consonant, i.e., any of the single letters B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, W, X, or Z.
+
+    * Wildcard '+':
+
+      This wildcard matches a subset of the vowels, specifically, any of the single letters E, I, or Y.
+
+    * Wildcard ':':
+
+      This wildcard matches any number of consonants (including zero).
+
+    * Wildcard '%':
 
       (TBW)
 
-    * Placeholder '%':
-
-      (TBW)
-
-      Note: in SAM Reciter, this placeholder is only implemented for suffixes, not for prefixes.
+      Note: in SAM Reciter, this wildcard is only implemented for suffixes, not for prefixes.
     """
 
     prefix: str
@@ -298,7 +300,7 @@ class Reciter:
         raise RuntimeError(f"No rule matched (source = {source!r} source_index = {source_index}).")
 
 
-def read_reciter_rules_dictionary(filename: str) -> dict[Optional[str], list[ReciterRewriteRule]]:
+def read_reciter_rules_into_dictionary(filename: str) -> dict[Optional[str], list[ReciterRewriteRule]]:
     """Read a file containing Reciter rewrite rule specifications, and return it as a key-indexed dictionary."""
 
     with open(filename, "r") as fi:
@@ -345,21 +347,21 @@ def read_reciter_rules_dictionary(filename: str) -> dict[Optional[str], list[Rec
 
 def main():
 
+    default_filename = "tests/test_reciter_features.out"
+    #default_filename = "tests/test_wordlist_short.out"
+    #default_filename = "tests/test_wordlist_long.out"
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--filename", default=default_filename)
 
-    args = parser.add_arguments()
+    args = parser.parse_args()
 
     # Instantiate a Reciter and configure it with the English->Phoneme rules.
-    reciter_rules_dictionary = read_reciter_rules_dictionary("english_reciter_rules.txt")
-
+    reciter_rules_dictionary = read_reciter_rules_into_dictionary("english_reciter_rules.txt")
     reciter = Reciter(reciter_rules_dictionary)
 
     # Read testcases.
-    filename = "tests/test_reciter_features.out"
-    #filename = "tests/test_wordlist_short.out"
-    #filename = "tests/test_wordlist_long.out"
-    with open(filename) as fi:
+    with open(args.filename) as fi:
         testcases = fi.read().splitlines()
 
     print()
@@ -386,7 +388,7 @@ def main():
             print(f"  Python output ......... : {reciter_test_output!r}")
             print()
 
-    print(f"Python Reciter tests: success = {success_count}, failure = {failure_count}.")
+    print(f"Python Reciter tests: success = {success_count}, failure = {failure_count} ({success_count/(success_count+failure_count)*100.0:.2f}%).")
     print()
 
 
