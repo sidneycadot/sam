@@ -18,7 +18,7 @@ class ReciterCharacterClass:
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
     })
 
-    # Letters A-Z and the single quote ard the "word characters". The single quote is considered a word character
+    # Letters A-Z and the single quote are the "word characters". The single quote is considered a word character
     # because for the purpose of pronunciation, it is often best to consider it as a continuation character for a
     # word, e.g. "brother's", "isn't", or "hasn't".
     word_characters = frozenset({
@@ -57,7 +57,7 @@ class ReciterCharacterClass:
 
 
 class StringScanner:
-    """The anstract base class for the ForwardStringScanner and BackwardStringScanner."""
+    """The abstract base class for the ForwardStringScanner and BackwardStringScanner."""
 
 
 class ForwardStringScanner(StringScanner):
@@ -78,7 +78,7 @@ class ForwardStringScanner(StringScanner):
         return ForwardStringScanner(self.s, b)
 
 
-class BackwardStringScanner:
+class BackwardStringScanner(StringScanner):
 
     def __init__(self, s: str, offset: int):
         if not (0 <= offset <= len(s)):
@@ -171,7 +171,7 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     * Wildcard ':':
 
-      This wildcard matches any number of consonants (including zero, i.e. no cononants at all).
+      This wildcard matches any number of consonants (including zero, i.e. no consonants at all).
 
     * Wildcard '%':
 
