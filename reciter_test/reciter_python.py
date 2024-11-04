@@ -112,17 +112,20 @@ def match_exact(pattern_scanner: StringScanner, source_scanner: StringScanner) -
 def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: StringScanner, fix_bugs: bool) -> bool:
     """Perform a wildcard pattern match according to the pattern language supported by the SAM Reciter.
 
-    The following wildcards are supported:
+    The pattern_scanner yields characters that are matched against the source_scanner. The following characters
+    are supported in the pattern:
+
+    * Letter (A-Z) or single quote:
+
+      These characters are matched literally against themselves in the source string.
+
+      Single quotes are assumed to be part of words, as in, for example, "haven't" or "brother's".
 
     * Wildcard ' ':
 
       This wildcard matches a small pause in the vocalisation -- a "space".
-
-      Any character that is not a letter A-Z or a single quote matches this.
-      Single quotes are assumed to also imply that the character is preceded by a letter, e.g. "haven't" or "brother's",
-      so those trailing 't' and 's' characters at the end are not preceded by a space, for example.
-
-      The beginning or end of the source text is also considered a match.
+      Any source character that is not a letter (A-Z) or a single quote matches this.
+      The beginning or end of the source string is also considered a match.
 
     * Wildcard '#':
 
@@ -132,27 +135,30 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
       This wildcard matches a subset of the consonants, specifically, any of the single letters B, D, G, J, L, M, N, R, V, W, or Z.
 
-    * Wildcard  '&':
+    * Wildcard '&':
 
-      This wildcard matches the single characters C, G, J, S, X, or Z, as well as the two-character combinations "CH", or "SH".
+      This wildcard intends to match the single characters C, G, J, S, X, or Z, as well as the two-character combinations "CH", or "SH".
 
-      That is the intention anyway. But SAM reciter has bugs in its matching code for this wildcard:
+      However, SAM Reciter has a bug in its matching code for this wildcard:
 
-      * In the SUFFIX implementation, it actually matches the two-character combinations "HC", or "HS" instead of "CH and "SH".
-        However, there are no rules that use the '&' wildcard in the suffix pattern, so this bug is never triggered.
+      * In the SUFFIX implementation, it actually matches the reversed two-character combinations "HC", or "HS" instead of "CH and "SH".
+
+        Fortunately, there are no rules that use the '&' wildcard in the suffix pattern, so this bug is never triggered.
 
     * Wildcard '@':
 
-      This wildcard matches the single characters D, J, L, N, R, S, T, or Z, as well as the two-character combinations "TH", "CH", or "SH".
+      This wildcard intends to match the single characters D, J, L, N, R, S, T, or Z, as well as the two-character combinations "TH", "CH", or "SH".
 
-      That is the intention anyway. But SAM reciter has bugs in its matching code for this wildcard:
+      However, SAM Reciter has two bugs in its matching code for this wildcard:
 
-      * In both the PREFIX and the SUFFIX version, the examination of the character after the 'H' is done on the same character.
-        So two-letter matches cannot occur for that reason.
+      * In both the PREFIX and the SUFFIX matching code, the examination of the character after the 'H' is done on the same character,
+        and the two-letter matches cannot occur for that reason.
       * In the SUFFIX version, the attempted code would match "HT", "HC", and "HS" if it weren't for the previous bug.
         However, there are no rules that use the '&' wildcard in the suffix pattern, so this bug is never triggered.
 
-      The net result is that, for both PREFIX and SUFFIX matching, only the single-character matches actually work.
+      The net result is that only the single-character matches actually work.
+
+      Some 0.1% of words are affected by this bug. Some examples: brochure, chew, enthusiasm, parachute.
 
     * Wildcard '^':
 
@@ -168,9 +174,12 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     * Wildcard '%':
 
-      (TBW)
+      This wildcard matches:
 
-      Note: in SAM Reciter, this wildcard is only implemented for suffixes, not for prefixes.
+      - The literal strings ER, ES, ED, ELY, ING, EFUL
+      - A single 'E' at the end of a word.
+
+      This wildcard is implemented for suffixes only in the original SAM Reciter, and the original ruleset only uses it in suffix patterns.
     """
 
     pattern_character = pattern_scanner.peek(1)
@@ -250,6 +259,7 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
         return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner, fix_bugs)
 
     if pattern_character == '%':
+
         peek = source_scanner.peek(4)
         if peek == "EFUL":
             return match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(4), fix_bugs)
@@ -437,13 +447,14 @@ def read_reciter_rules_into_dictionary(filename: str) -> dict[Optional[str], lis
 
 def main():
 
+    default_testcase_filename = "tests/reciter_features.out"
     default_rules_filename = "english_reciter_rules.txt"
-    default_filename = "tests/reciter_features.out"
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--filename", default=default_filename)
-    parser.add_argument("-r", "--rules-filename", default=default_rules_filename)
-    parser.add_argument("-b", "--fix-bugs", action='store_true')
+    parser = argparse.ArgumentParser(description="Test the Python re-implementation of the SAM Reciter.")
+
+    parser.add_argument("-f", "--filename", default=default_testcase_filename, help=f"testcase filename (default: {default_testcase_filename})")
+    parser.add_argument("--rules-filename", default=default_rules_filename, help=f"rewrite rule definition filename (default: {default_rules_filename})")
+    parser.add_argument("--fix-bugs", action='store_true', help=f"fix known bugs in the rewrite rule matching")
 
     args = parser.parse_args()
 
