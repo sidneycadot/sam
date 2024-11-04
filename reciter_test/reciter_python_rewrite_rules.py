@@ -9,6 +9,8 @@ from typing import Optional
 class ReciterCharacterClass:
     """Character classes used by SAM Reciter during rule matching."""
 
+    # pylint: disable=too-few-public-methods
+
     SPACE = ' '
     SINGLE_QUOTE = '\''
     BACKSLASH = '\\'
@@ -18,7 +20,7 @@ class ReciterCharacterClass:
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'
     })
 
-    # Letters A-Z and the single quote ard the "word characters". The single quote is considered a word character
+    # Letters A-Z and the single quote are the "word characters". The single quote is considered a word character
     # because for the purpose of pronunciation, it is often best to consider it as a continuation character for a
     # word, e.g. "brother's", "isn't", or "hasn't".
     word_characters = frozenset({
@@ -57,41 +59,57 @@ class ReciterCharacterClass:
 
 
 class StringScanner:
-    """The anstract base class for the ForwardStringScanner and BackwardStringScanner."""
+    """The abstract base class for the ForwardStringScanner and BackwardStringScanner."""
 
+    def peek(self, count: int) -> Optional[str]:
+        """Take a peek at the next 'count' characters in the string."""
+        raise NotImplementedError()
+    def drop(self, count: int) -> StringScanner:
+        """Return a scanner to the same string, with 'count' characters discarded."""
+        raise NotImplementedError()
 
 class ForwardStringScanner(StringScanner):
+    """A string scanner that scans a string from left to right."""
 
     def __init__(self, s: str, offset: int):
-        if not (0 <= offset <= len(s)):
-            raise RuntimeError()
+        if not (0 <= offset <= len(s)):  # pylint: disable=superfluous-parens
+            raise ValueError("Bad offset value.")
         self.s = s
         self.offset = offset
 
     def peek(self, count: int) -> Optional[str]:
+        """Take a peek at the next 'count' characters in the string."""
         a = self.offset
         b = self.offset + count
         return self.s[a:b] if b <= len(self.s) else None
 
     def drop(self, count: int) -> ForwardStringScanner:
+        """Return a scanner to the same string, with 'count' characters discarded."""
         b = min(self.offset + count, len(self.s))
         return ForwardStringScanner(self.s, b)
 
 
 class BackwardStringScanner:
+    """A string scanner that scans a string from right to left."""
 
     def __init__(self, s: str, offset: int):
-        if not (0 <= offset <= len(s)):
-            raise RuntimeError()
+        if not (0 <= offset <= len(s)):  # pylint: disable=superfluous-parens
+            raise ValueError("Bad offset value.")
         self.s = s
         self.offset = offset
 
     def peek(self, count: int) -> Optional[str]:
+        """Take a peek at the next 'count' characters in the string.
+
+        Note that, even though we scan the string from right to left, the peek sub-string 
+        intentionally has the same character order as in the source string.
+        """
         a = self.offset - count
         b = self.offset
         return self.s[a:b] if a >= 0 else None
 
     def drop(self, count: int) -> BackwardStringScanner:
+        """Return a scanner to the same string, with 'count' characters discarded."""
         a = max(self.offset - count, 0)
         return BackwardStringScanner(self.s, a)
 
@@ -124,7 +142,7 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     * Wildcard ' ':
 
-      This wildcard matches a small pause in the vocalisation -- a "space".
+      This wildcard matches a small pause in the vocalization -- a "space".
       Any source character that is not a letter (A-Z) or a single quote matches this.
       The beginning or end of the source string is also considered a match.
 
@@ -148,14 +166,16 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     * Wildcard '@':
 
-      This wildcard intends to match the single characters D, J, L, N, R, S, T, or Z, as well as the two-character combinations "TH", "CH", or "SH".
+      This wildcard intends to match the single characters D, J, L, N, R, S, T, or Z, as well as the
+      two-character combinations "TH", "CH", or "SH".
 
       However, SAM Reciter has two bugs in its matching code for this wildcard:
 
-      * In both the PREFIX and the SUFFIX matching code, the examination of the character after the 'H' is done on the same character,
-        and the two-letter matches cannot occur for that reason.
-      * In the SUFFIX version, the attempted code would match "HT", "HC", and "HS" if it weren't for the previous bug.
-        However, there are no rules that use the '&' wildcard in the suffix pattern, so this bug is never triggered.
+      * In both the PREFIX and the SUFFIX matching code, the examination of the character after the 'H'
+        is done on the same character, and the two-letter matches cannot occur for that reason.
+      * In the SUFFIX version, the attempted code would match "HT", "HC", and "HS" if it weren't for
+        the previous bug. However, there are no rules that use the '&' wildcard in the suffix pattern,
+        so this bug is never triggered.
 
       The net result is that only the single-character matches actually work.
 
@@ -163,7 +183,8 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     * Wildcard '^':
 
-      This wildcard matches a single consonant, i.e., any of the single letters B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, W, X, or Z.
+      This wildcard matches a single consonant, i.e., any of the single letters B, C, D, F, G, H,
+        J, K, L, M, N, P, Q, R, S, T, V, W, X, or Z.
 
     * Wildcard '+':
 
@@ -171,7 +192,7 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     * Wildcard ':':
 
-      This wildcard matches any number of consonants (including zero, i.e. no cononants at all).
+      This wildcard matches any number of consonants (including zero, i.e. no consonants at all).
 
     * Wildcard '%':
 
@@ -180,8 +201,11 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
       - The literal strings ER, ES, ED, ELY, ING, EFUL
       - A single 'E' at the end of a word.
 
-      This wildcard is implemented for suffixes only in the original SAM Reciter, and the original ruleset only uses it in suffix patterns.
+      This wildcard is implemented for suffixes only in the original SAM Reciter, and the original
+      ruleset only uses it in suffix patterns.
     """
+
+    # pylint: disable=too-many-return-statements, too-many-branches
 
     pattern_character = pattern_scanner.peek(1)
     if pattern_character is None:
@@ -191,26 +215,34 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
     if pattern_character in ReciterCharacterClass.word_characters:
         # Try to match a literal source character to the pattern character.
         source_character = source_scanner.peek(1)
-        return (pattern_character == source_character) and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
+        return (pattern_character == source_character) and \
+          match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
 
     if pattern_character == ' ':
         source_character = source_scanner.peek(1)
-        return source_character not in ReciterCharacterClass.word_characters and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
+        return source_character not in ReciterCharacterClass.word_characters and \
+            match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
 
     if pattern_character == '#':
         source_character = source_scanner.peek(1)
-        return source_character in ReciterCharacterClass.vowels and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
+        return source_character in ReciterCharacterClass.vowels and \
+            match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
 
     if pattern_character == '.':
         source_character = source_scanner.peek(1)
-        return source_character in ('B', 'D', 'G', 'J', 'L', 'M', 'N', 'R', 'V', 'W', 'Z') and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
+        return source_character in ('B', 'D', 'G', 'J', 'L', 'M', 'N', 'R', 'V', 'W', 'Z') and \
+            match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
 
     if pattern_character == '&':
 
-        # We only need to look at the "prefix" (backward scanning) cases, as only those are used with the English ruleset.
-
-        # A '&' character matches any of the letters {C, G, J, S, X, Z} or a two-letter combination {CH, SH}.
-        # Order matters here. We should really try to match the two-letter combinations first, but we follow here whsat the assembly does.
+        # We only need to look at the "prefix" (backward scanning) cases, as only those are used
+        # with the English ruleset.
+        #
+        # A '&' character matches any of the letters {C, G, J, S, X, Z} or a two-letter
+        # combination {CH, SH}.
+        #
+        # Order matters here. We should really try to match the two-letter combinations first, but
+        # we follow here what the assembly does.
 
         # Check for one-letter matches.
         if source_scanner.peek(1) in {'C', 'G', 'J', 'S', 'X', 'Z'}:
@@ -223,10 +255,11 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
         return False
 
     if pattern_character == '@':
-        # A '&' character matches any of the letters {D, J, L, N, R, S, T, or Z}, or a two-letter combination {TH, CH, or SH}.
+        # A '&' character matches any of the letters {D, J, L, N, R, S, T, or Z}, or a two-letter
+        # combination {TH, CH, or SH}.
         #
         # Order matters here. We should really try to match the two-letter combinations first,
-        # but we follow here whsat the assembly does (or tries to do).
+        # but we follow here what the assembly does (or tries to do).
 
         # Check for one-letter matches.
         if source_scanner.peek(1) in {'D', 'J', 'L', 'N', 'R', 'S', 'T', 'Z'}:
@@ -244,12 +277,14 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     if pattern_character == '^':
         source_character = source_scanner.peek(1)
-        return source_character in ReciterCharacterClass.consonants and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
+        return source_character in ReciterCharacterClass.consonants and \
+            match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
 
     if pattern_character == '+':
         # A '+' character matches any of the letters {E, I, Y}.
         source_character = source_scanner.peek(1)
-        return source_character in {'E', 'I', 'Y'} and match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
+        return source_character in {'E', 'I', 'Y'} and \
+            match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
 
     if pattern_character == ':':
         # A '+' character matches any number of consonants.
@@ -298,8 +333,8 @@ class ReciterRewriteRule:
 
     The rewrite rules are used as follows by the SAM Reciter:
 
-    First, a determination is made if the rule matches. This is a three-step process; if any match step fails,
-    the rule is considered a non-match.
+    First, a determination is made if the rule matches. This is a three-step process; if any match
+    step fails, the rule is considered a non-match.
 
     (1) Match the rewrite rule's 'stem' at the current position in the source text.
         This match must be verbatim; characters, including symbols, are matched literally.
@@ -307,12 +342,13 @@ class ReciterRewriteRule:
     (2) Match the rewrite rule's 'prefix', going left from the current position in the source text.
         The prefix can consists of the letters A-Z and a number of wildcard symbols.
 
-    (3) Match the rewrite rule's 'suffix', going right from the character following the stem in the source text.
-        Note that we're sure that the stem is present in the source text, as it was matched during step (1).
-        The suffix can consists of the letters A-Z and a number of wildcard symbols.
+    (3) Match the rewrite rule's 'suffix', going right from the character following the stem in the
+        source text. Note that we're sure that the stem is present in the source text, as it was
+        matched during step (1). The suffix can consists of the letters A-Z and a number of
+        wildcard symbols.
 
-    If all three steps indicate a match, the rule is considered to match. In that case, the rewrite rule's
-    'replacement' string is emitted into the phoneme buffer for subsequent vocalisation.
+    If all three steps indicate a match, the rule is considered to match. In that case, the rewrite
+    rule's 'replacement' string is emitted into the phoneme buffer for subsequent vocalization.
     """
 
     def __init__(self, prefix: str, stem: str, suffix: str, replacement: str):
@@ -326,7 +362,9 @@ class ReciterRewriteRule:
 
     def match(self, source: str, source_offset: int, fix_bugs: bool) -> bool:
         """Determine if the rule matches at a certain offset in the source file."""
-        return self._match_stem(source, source_offset) and self._match_prefix(source, source_offset, fix_bugs) and self._match_suffix(source, source_offset, fix_bugs)
+        return self._match_stem(source, source_offset) and \
+            self._match_prefix(source, source_offset, fix_bugs) and \
+            self._match_suffix(source, source_offset, fix_bugs)
 
     def _match_stem(self, source: str, source_offset: int) -> bool:
         pattern_scanner = ForwardStringScanner(self.stem, 0)
@@ -345,7 +383,7 @@ class ReciterRewriteRule:
 
 
 def read_reciter_rules_into_dictionary(filename: str) -> dict[Optional[str], list[ReciterRewriteRule]]:
-    """Utilitie class to read a file containing SAM Reciter rewrite rule specifications and return it as a key-indexed dictionary."""
+    """Utility class to read a file containing SAM Reciter rewrite rules and return them as a key-indexed dictionary."""
 
     # Prepare empty rules dictionary with all keys (None and A..Z), but no rules.
     rules_dictionary = {None: []}
@@ -361,7 +399,7 @@ def read_reciter_rules_into_dictionary(filename: str) -> dict[Optional[str], lis
     rule_regexp = re.compile(r"(.*)\((.*)\)(.*)=(.*)")
 
     # Read the entire file.
-    with open(filename, "r") as fi:
+    with open(filename, "r", encoding="ascii") as fi:
         data = fi.read()
 
     # Process all lines in the file. They are either 'key' lines or 'rule' lines.

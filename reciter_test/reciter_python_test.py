@@ -10,26 +10,32 @@ from reciter_python_rewrite_rules import read_reciter_rules_into_dictionary
 
 
 def main():
+    """Main test function."""
+
+    # pylint: disable=too-many-locals
 
     default_testcase_filename = "tests/reciter_features.out"
     default_rules_filename = "english_reciter_rules.txt"
 
     parser = argparse.ArgumentParser(description="Test the Python re-implementation of the SAM Reciter.")
 
-    parser.add_argument("-f", "--filename", default=default_testcase_filename, help=f"testcase filename (default: {default_testcase_filename})")
-    parser.add_argument("--rules-filename", default=default_rules_filename, help=f"rewrite rule definition filename (default: {default_rules_filename})")
-    parser.add_argument("--fix-bugs", action='store_true', help=f"fix known bugs in the rewrite rule matching")
+    parser.add_argument("-f", "--filename", default=default_testcase_filename,
+                        help=f"testcase filename (default: {default_testcase_filename})")
+    parser.add_argument("--rules-filename", default=default_rules_filename,
+                        help=f"rewrite rule definition filename (default: {default_rules_filename})")
+    parser.add_argument("--fix-bugs", action='store_true',
+                        help="fix known bugs in the rewrite rule matching")
 
     args = parser.parse_args()
 
     # Read the rewrite rule file into a rewrite rule dictionary.
     reciter_rules_dictionary = read_reciter_rules_into_dictionary(args.rules_filename)
 
-    # Make a Reciter instancethat will use the given rewrite rule dictionary.
+    # Make a Reciter instance that will use the given rewrite rule dictionary.
     reciter = Reciter(reciter_rules_dictionary, fix_bugs=args.fix_bugs)
 
     # Read testcases.
-    with open(args.filename) as fi:
+    with open(args.filename, "r", encoding="ascii") as fi:
         testcases = fi.read().splitlines()
 
     print()
@@ -57,7 +63,8 @@ def main():
             print(f"  Python Reciter output ............... : {reciter_test_output!r}")
             print()
 
-    print(f"Python Reciter tests: success = {success_count}, failure = {failure_count} ({success_count/(success_count+failure_count)*100.0:.2f}%).")
+    print(f"Python Reciter tests: success = {success_count}, failure = {failure_count}"
+          f" ({success_count/(success_count+failure_count)*100.0:.2f}%).")
     print()
 
 
