@@ -89,7 +89,7 @@ class ForwardStringScanner(StringScanner):
         return ForwardStringScanner(self.s, b)
 
 
-class BackwardStringScanner:
+class BackwardStringScanner(StringScanner):
     """A string scanner that scans a string from right to left."""
 
     def __init__(self, s: str, offset: int):
