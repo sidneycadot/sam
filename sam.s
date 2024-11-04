@@ -68,16 +68,15 @@ ZP_CC_TEMP := $CC                               ; Secondary usage: counter in SA
 
 ; Address $CD is used as a temporary variable in SAM_COPY_BASIC_SAM_STRING to hold the size of the string copied
 ; from SAM$ into SAM_BUFFER.
-;
-; TODO: document/figure out its use outside of SAM_COPY_BASIC_SAM_STRING.
 
-SAM_ZP_CD := $CD                                ; TODO
+SAM_ZP_CD := $CD                                ; Callers can set this to 1 if they want to inhibit re-enabling the interrupts
+                                                ; at the end of the SAM_SAY_PHONEMES subroutine.
 
 ZP_CE_PTR    := $CE                             ; Exclusively used in "SAM_COPY_BASIC_SAM_STRING" as a pointer into
 ZP_CE_PTR_LO := $CE                             ; the Atari BASIC variable name table while looking for SAM$.
 ZP_CE_PTR_HI := $CF                             ;
 
-ZP_D0_PTR := $D0                                ; Exclusively used in "SAM_COPY_BASIC_SAM_STRING" as a to
+ZP_D0_PTR    := $D0                             ; Exclusively used in "SAM_COPY_BASIC_SAM_STRING" as a to
 ZP_D0_PTR_LO := $D0                             ; the content of SAM$.
 ZP_D0_PTR_HI := $D1                             ;
 
@@ -94,10 +93,8 @@ ZP_E9 := $E9                                    ;
 ZP_EA := $EA                                    ;
 
 ;
-;
-;
 
-ZP_EB_PTR := $EB                                ;
+ZP_EB_PTR    := $EB                             ;
 ZP_EB_PTR_LO := $EB                             ;
 ZP_EB_PTR_HI := $EC                             ;
 
@@ -116,9 +113,11 @@ ZP_F6 := $F6                                    ;
 ZP_F7 := $F7                                    ;
 ZP_F8 := $F8                                    ;
 ZP_F9 := $F9                                    ;
+
 ZP_SAVE_Y := $FA                                ;
 ZP_SAVE_X := $FB                                ;
 ZP_SAVE_A := $FC                                ;
+
 ZP_FD := $FD                                    ;
 ZP_FE := $FE                                    ;
 ZP_FF := $FF                                    ;
@@ -203,8 +202,10 @@ RUN_SAM_FROM_MACHINE_LANGUAGE:
 
 ; ----------------------------------------------------------------------------
 
-SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER as sound.
+SAM_SAY_PHONEMES:
 
+        ; Render phonemes in SAM_BUFFER as sound.
+        ;
         ; When we get here, it is expected that SAM_SAVE_ZP_ADDRESSES has been called
         ; previously to save addresses $E1..$FF.
         ;
@@ -219,15 +220,16 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
 
         lda     #$FF                            ;
         sta     ERROR                           ;
-        jsr     SUB_26EA                        ; Translate text-based SAM_BUFFER phonemes to binary.
+        jsr     PREP_1_BINARY_PHONEMES          ; Translate text-based SAM_BUFFER phonemes to binary.
         lda     ERROR                           ;
         cmp     #$FF                            ;
-        bne     @5                              ;
-        jsr     SUB_2837                        ;
-        jsr     SUB_2A1D                        ;
-        jsr     SUB_2775                        ;
-        jsr     SUB_43F2                        ;
-        jsr     SUB_279A                        ;
+        bne     @wrap_up                        ;
+
+        jsr     PREP_2                          ; Prepare the phoneme rendering.
+        jsr     PREP_3                          ;
+        jsr     PREP_4                          ;
+        jsr     PREP_5                          ;
+        jsr     PREP_6                          ;
 
         lda     #0                              ; Time-critical section starts here:
         sta     NMIEN                           ; - Disable NMI interrupts.
@@ -267,28 +269,34 @@ SAM_SAY_PHONEMES:                               ; Render phonemes in SAM_BUFFER 
         bcs     @3                              ;
         inx                                     ;
         bne     @join                           ;
+
         beq     @4                              ;
 @3:     lda     #$FF                            ;
         sta     D2262,x                         ;
 
-@4:     jsr     SUB_4336                        ;
+@4:     jsr     PLAY_SAMPLES_1                  ;
 
-        lda     #$FF                            ; Ensure there's a termination phoneme.
+        lda     #$FF                            ; Ensure there's a terminating phoneme.
         sta     D2262 + $FE                     ;
 
-        jsr     SUB_43AA                        ;
+        jsr     PLAY_SAMPLES_2                  ;
 
         ldx     #0                              ; Inspect SAM_ZP_CD to see if it is currently 0.
         cpx     SAM_ZP_CD                       ;
         stx     SAM_ZP_CD                       ; Always reset SAM_ZP_CD to zero.
-        beq     @5                              ; If it was previously zero, restore ZP addresses and interrupts.
-        rts                                     ; If not, just return.
+        beq     @wrap_up                        ; If it was previously zero, restore ZP addresses and interrupts.
 
-@5:     jsr     SAM_RESTORE_ZP_ADDRESSES        ; Restore zero page addresses.
-        lda     #$FF                            ;
-        sta     NMIEN                           ; Enable NMI interrupts.
-        lda     POKMSK                          ; Load shadow IRQ enabled mask.
-        sta     IRQEN                           ; Restore IRQ interrupts.
+        rts                                     ; Restoration of ZP addrsses and interrupts inhibited. Just return.
+
+@wrap_up:
+
+        jsr     SAM_RESTORE_ZP_ADDRESSES        ; Restore zero page addresses.
+
+        lda     #$FF                            ; Restore interrupts"
+        sta     NMIEN                           ; - Re-enable NMI interrupts.
+        lda     POKMSK                          ; - Load shadow IRQ enabled mask;
+        sta     IRQEN                           ;   Restore IRQ interrupts.
+
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
@@ -622,7 +630,7 @@ SUB_RESTORE_AXY:
 
 ; ----------------------------------------------------------------------------
 
-SUB_26B8:
+SHIFT_DATA:
 
         jsr     SUB_SAVE_AXY                    ;
         ldx     #$FF                            ;
@@ -648,7 +656,7 @@ SUB_26B8:
 
 ; ----------------------------------------------------------------------------
 
-SUB_26EA:                                       ; First subroutine called by SAM_SAY_PHONEMES.
+PREP_1_BINARY_PHONEMES:                         ; First subroutine called by SAM_SAY_PHONEMES.
                                                 ; This translates the SAM phonemes in ASCII to a binary representation.
 
         ldx     #0                              ; Initialize A, X, Y registers to zero.
@@ -740,12 +748,12 @@ SUB_26EA:                                       ; First subroutine called by SAM
 
 ; ----------------------------------------------------------------------------
 
-SUB_2775:                                       ; Called by SAM_SAY_PHONEMES.
+PREP_4:                                         ; Called by SAM_SAY_PHONEMES.
 
         ldy     #0                              ;
-@1:     lda     D2262,y                         ;
+@loop:  lda     D2262,y                         ;
         cmp     #$FF                            ;
-        beq     @4                              ;
+        beq     @exit                           ;
         tax                                     ;
         lda     D2462,y                         ;
         beq     @2                              ;
@@ -757,13 +765,13 @@ SUB_2775:                                       ; Called by SAM_SAY_PHONEMES.
 @2:     lda     D3830,x                         ;
         sta     D2362,y                         ;
 @3:     iny                                     ;
-        jmp     @1                              ;
+        jmp     @loop                           ;
 
-@4:     rts                                     ;
+@exit:  rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
-SUB_279A:                                       ; Called by SAM_SAY_PHONEMES.
+PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
 
         lda     #0                              ;
         sta     ZP_FF                           ;
@@ -793,14 +801,14 @@ SUB_279A:                                       ; Called by SAM_SAY_PHONEMES.
         sta     ZP_F8                           ;
         inx                                     ;
         stx     ZP_F6                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         inc     ZP_F9                           ;
         ldy     ZP_F9                           ;
         lda     D3830,y                         ;
         sta     ZP_F8                           ;
         inx                                     ;
         stx     ZP_F6                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
@@ -833,13 +841,13 @@ SUB_279A:                                       ; Called by SAM_SAY_PHONEMES.
         stx     ZP_F9                           ;
         lda     D3830,x                         ;
         sta     ZP_F8                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         inc     ZP_F6                           ;
         inx                                     ;
         stx     ZP_F9                           ;
         lda     D3830,x                         ;
         sta     ZP_F8                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
 @7:     inc     ZP_FF                           ;
@@ -847,7 +855,7 @@ SUB_279A:                                       ; Called by SAM_SAY_PHONEMES.
 
 ; ----------------------------------------------------------------------------
 
-SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
+PREP_2:                                         ; Called by SAM_SAY_PHONEMES.
 
         lda     #0                              ;
         sta     ZP_FF                           ;
@@ -874,7 +882,7 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         beq     @5                              ;
         lda     #$15                            ;
 @4:     sta     ZP_F9                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         ldx     ZP_FF                           ;
         jmp     @25                             ;
 
@@ -891,7 +899,7 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         sta     D2262,x                         ;
         inx                                     ;
         stx     ZP_F6                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         jmp     @36                             ;
 
 @8:     cmp     #$4F                            ;
@@ -923,7 +931,7 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         sta     ZP_F7                           ;
         lda     #$1F                            ;
         sta     ZP_F9                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         jmp     @36                             ;
 
 @11:    ldx     ZP_FF                           ;
@@ -1059,7 +1067,7 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
         dex                                     ;
         lda     D2462,x                         ;
         sta     ZP_F7                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         jmp     @36                             ;
 
 @31:    cmp     #$45                            ;
@@ -1100,7 +1108,7 @@ SUB_2837:                                       ; Called by SAM_SAY_PHONEMES.
 
 ; ----------------------------------------------------------------------------
 
-SUB_2A1D:                                       ; Called by SAM_SAY_PHONEMES.
+PREP_3:                                         ; Called by SAM_SAY_PHONEMES.
 
         lda     #0                              ;
         sta     ZP_FF                           ;
@@ -1139,7 +1147,7 @@ D2A4F:  .byte   $00,$82,$09,$00,$00,$00,$EB,$37,$A2,$31,$30,$00,$20,$11,$00,$80
 
 ; ----------------------------------------------------------------------------
 
-        ; It seems as if the are from 0x2A6F .. 0x2AD9 is not used (?)
+        ; It seems as if the area from 0x2A6F .. 0x2AD9 is not used (?)
 
         ; (97 bytes)
 
@@ -1555,7 +1563,7 @@ D3F84:  .byte   $00,$00,$E0,$E6,$EC,$F3,$F9,$00,$06,$0C,$06
 
 ; ----------------------------------------------------------------------------
 
-SUB_3F8F:
+PLAY_SAMPLES_REALTIME_SUB_1:
 
         ldy     #0                              ;
         bit     ZP_F2                           ;
@@ -1615,7 +1623,7 @@ SAM_RESTORE_ZP_ADDRESSES:
 
 ; ----------------------------------------------------------------------------
 
-SUB_3FD6:
+PLAY_SAMPLES_REALTIME:
 
         lda     D3EC0                           ;
         cmp     #$FF                            ;
@@ -1772,7 +1780,7 @@ L404E:  lda     #0                              ;
         sta     ZP_F2                           ;
         lda     ZP_E5                           ;
         sta     ZP_F1                           ;
-        jsr     SUB_3F8F                        ;
+        jsr     PLAY_SAMPLES_REALTIME_SUB_1     ;
         ldx     ZP_E5                           ;
         ldy     ZP_E1                           ;
         jmp     @199                            ;
@@ -1785,7 +1793,7 @@ L404E:  lda     #0                              ;
         sta     ZP_F2                           ;
         lda     ZP_E5                           ;
         sta     ZP_F1                           ;
-        jsr     SUB_3F8F                        ;
+        jsr     PLAY_SAMPLES_REALTIME_SUB_1     ;
         ldx     ZP_E5                           ;
         ldy     ZP_E6                           ;
 @199:   lda     #0                              ;
@@ -1887,7 +1895,7 @@ L404E:  lda     #0                              ;
 
 ; ----------------------------------------------------------------------------
 
-L41C2:  jsr     SUB_426A                        ;
+L41C2:  jsr     PLAY_SAMPLES_REALTIME_SUB_2     ;
         iny                                     ;
         iny                                     ;
         dec     ZP_ED                           ;
@@ -1973,7 +1981,7 @@ L4222:  dec     ZP_E9                           ;
         bne     L424F                           ;
         lda     ZP_E4                           ;
         beq     L424F                           ;
-        jsr     SUB_426A                        ;
+        jsr     PLAY_SAMPLES_REALTIME_SUB_2     ;
         jmp     @100                            ;
 
 ; ----------------------------------------------------------------------------
@@ -1994,7 +2002,7 @@ L424F:  clc                                     ;
 
 ; ----------------------------------------------------------------------------
 
-SUB_426A:
+PLAY_SAMPLES_REALTIME_SUB_2:
 
         sty     ZP_EE                           ;
         lda     ZP_E4                           ;
@@ -2013,7 +2021,7 @@ SUB_426A:
         sta     ZP_EB_PTR_LO                    ;
         tya                                     ;
         and     #$F8                            ;
-        bne     L4296                           ;
+        bne     @1                              ;
         ldy     ZP_EE                           ;
         lda     D2E00,y                         ;
         lsr     a                               ;
@@ -2022,9 +2030,7 @@ SUB_426A:
         lsr     a                               ;
         jmp     L42C2                           ;
 
-; ----------------------------------------------------------------------------
-
-L4296:  eor     #$FF                            ;
+@1:     eor     #$FF                            ;
         tay                                     ;
 L4299:  lda     #8                              ;
         sta     ZP_F5                           ;
@@ -2052,8 +2058,6 @@ SMC_42B0 := * + 1                               ; Self-modifying code: argument 
         sta     ZP_E9                           ;
         ldy     ZP_EE                           ;
         rts                                     ;
-
-; ----------------------------------------------------------------------------
 
 L42C2:  eor     #$FF                            ;
         sta     ZP_E8                           ;
@@ -2089,11 +2093,11 @@ SMC_42DF := * + 1                               ; Self-modifying code: argument 
 
 ; ----------------------------------------------------------------------------
 
+        ; Continuation / end of PLAY_SAMPLES_REALTIME.
+
 L42F5:  lda     #1                              ;
         sta     ZP_ED                           ;
         bne     L42FF                           ;
-
-; ----------------------------------------------------------------------------
 
 L42FB:  lda     #$FF                            ;
         sta     ZP_ED                           ;
@@ -2128,11 +2132,11 @@ L42FF:  stx     ZP_EE                           ;
 
 ; ----------------------------------------------------------------------------
 
-D4331:  .byte   $18,$1A,$17,$17,$17
+D4331:  .byte   $18,$1A,$17,$17,$17             ; Used in PLAY_SAMPLES_REALTIME_SUB_2
 
 ; ----------------------------------------------------------------------------
 
-SUB_4336:
+PLAY_SAMPLES_1:
 
         ldx     #$FF                            ;
         stx     ZP_F3                           ;
@@ -2163,7 +2167,7 @@ SUB_4336:
         sta     ZP_F7                           ;
         lda     #$FE                            ;
         sta     ZP_F9                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
         jmp     @1                              ;
@@ -2188,7 +2192,7 @@ SUB_4336:
         lda     #0                              ;
         sta     ZP_F4                           ;
         sta     ZP_F7                           ;
-        jsr     SUB_26B8                        ;
+        jsr     SHIFT_DATA                      ;
         inx                                     ;
         stx     ZP_FF                           ;
         jmp     @1                              ;
@@ -2199,11 +2203,9 @@ SUB_4336:
 
 ; ----------------------------------------------------------------------------
 
-D43A9:  .byte   $07                             ;
+SAVE_X:  .byte   7                              ;
 
-; ----------------------------------------------------------------------------
-
-SUB_43AA:
+PLAY_SAMPLES_2:
 
         lda     #0                              ;
         tax                                     ;
@@ -2213,17 +2215,17 @@ SUB_43AA:
         bne     @2                              ;
         lda     #$FF                            ; Handle case: $FF
         sta     D3EC0,y                         ;
-        jsr     SUB_3FD6                        ;
+        jsr     PLAY_SAMPLES_REALTIME           ;
         rts                                     ;
 
 @2:     cmp     #$FE                            ;
         bne     @3                              ;
         inx                                     ; Handle case: $FE
-        stx     D43A9                           ;
+        stx     SAVE_X                          ;
         lda     #$FF                            ;
         sta     D3EC0,y                         ;
-        jsr     SUB_3FD6                        ;
-        ldx     D43A9                           ;
+        jsr     PLAY_SAMPLES_REALTIME           ;
+        ldx     SAVE_X                          ;
         ldy     #0                              ;
         jmp     @1                              ;
 
@@ -2243,7 +2245,7 @@ SUB_43AA:
 
 ; ----------------------------------------------------------------------------
 
-SUB_43F2:                                       ; Called by SAM_SAY_PHONEMES.
+PREP_5:                                         ; Called by SAM_SAY_PHONEMES.
 
         ldx     #0                              ;
 @1:     ldy     D2262,x                         ;
