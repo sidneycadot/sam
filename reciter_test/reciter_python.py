@@ -47,8 +47,8 @@ class Reciter:
 
         source_character = source[source_offset]
 
-        # If the source character is a period that is not followed by a digit, the period denotes an end of a sentence.
-        # Handle this by emitting a period pseudo-phoneme.
+        # If the source character is a period that is not followed by a digit, the period denotes
+        # an end of a sentence. Handle this by emitting a period pseudo-phoneme.
         if source_character == "." and \
            not ((source_offset + 1) < len(source) and \
                 source[source_offset + 1] in ReciterCharacterClass.digits):
@@ -61,7 +61,7 @@ class Reciter:
         else:
             rule_list = self.rules_dictionary[source_character]
 
-        # We will now try all rules in the rule list in order; and we accept and apply the first one that succeeds.
+        # We will now try all rules in the rule list in order; we accept and apply the first one that succeeds.
         for rule in rule_list:
             if rule.match(source, source_offset, self.fix_bugs):
                 # This rule matches! Apply its replacement.

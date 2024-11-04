@@ -1,6 +1,6 @@
 #! /usr/bin/env -S python3 -B
 
-"""This is a tester for the Python implementation of the SAM reciter."""
+"""This is a tester for the Python re-implementation of the SAM Reciter program."""
 
 import argparse
 import re
@@ -13,6 +13,8 @@ def main():
     """Main test function."""
 
     # pylint: disable=too-many-locals
+
+    # Parse command line arguments.
 
     default_testcase_filename = "tests/reciter_features.out"
     default_rules_filename = "english_reciter_rules.txt"
@@ -29,14 +31,19 @@ def main():
     args = parser.parse_args()
 
     # Read the rewrite rule file into a rewrite rule dictionary.
+
     reciter_rules_dictionary = read_reciter_rules_into_dictionary(args.rules_filename)
 
-    # Make a Reciter instance that will use the given rewrite rule dictionary.
+    # Make a Reciter instance that will use the rewrite rule dictionary we just read.
+
     reciter = Reciter(reciter_rules_dictionary, fix_bugs=args.fix_bugs)
 
-    # Read testcases.
+    # Read the testcases.
+
     with open(args.filename, "r", encoding="ascii") as fi:
         testcases = fi.read().splitlines()
+
+    # Process the testcases.
 
     print()
     print(f"Testing the Python Reciter with {len(testcases)} testcases:")

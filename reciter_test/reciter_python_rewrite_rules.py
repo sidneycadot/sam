@@ -1,4 +1,4 @@
-"""Provide the ReciterRewriteRule class, including matching functionality."""
+"""This module provides the ReciterRewriteRule class, including matching functionality."""
 
 from __future__ import annotations
 
@@ -64,9 +64,11 @@ class StringScanner:
     def peek(self, count: int) -> Optional[str]:
         """Take a peek at the next 'count' characters in the string."""
         raise NotImplementedError()
+
     def drop(self, count: int) -> StringScanner:
         """Return a scanner to the same string, with 'count' characters discarded."""
         raise NotImplementedError()
+
 
 class ForwardStringScanner(StringScanner):
     """A string scanner that scans a string from left to right."""
@@ -102,7 +104,8 @@ class BackwardStringScanner(StringScanner):
         """Take a peek at the next 'count' characters in the string.
 
         Note that, even though we scan the string from right to left, the peek sub-string 
-        intentionally has the same character order as in the source string.
+        has the same character order as the source string. This is very much intentional;
+        we want to be able to see phonetically meaningful sub-strings like "SH" and "CH".
         """
         a = self.offset - count
         b = self.offset
@@ -142,7 +145,7 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     * Wildcard ' ':
 
-      This wildcard matches a small pause in the vocalization -- a "space".
+      This wildcard matches a small pause in the vocalization --- a "space".
       Any source character that is not a letter (A-Z) or a single quote matches this.
       The beginning or end of the source string is also considered a match.
 
@@ -152,17 +155,21 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     * Wildcard '.':
 
-      This wildcard matches a subset of the consonants, specifically, any of the single letters B, D, G, J, L, M, N, R, V, W, or Z.
+      This wildcard matches a subset of the consonants, specifically,
+        any of the single letters B, D, G, J, L, M, N, R, V, W, or Z.
 
     * Wildcard '&':
 
-      This wildcard intends to match the single characters C, G, J, S, X, or Z, as well as the two-character combinations "CH", or "SH".
+      This wildcard intends to match the single characters C, G, J, S, X, or Z, as well as
+        the two-character combinations "CH", or "SH".
 
       However, SAM Reciter has a bug in its matching code for this wildcard:
 
-      * In the SUFFIX implementation, it actually matches the reversed two-character combinations "HC", or "HS" instead of "CH and "SH".
+      * In the SUFFIX implementation, it actually matches the reversed two-character combinations
+        "HC", or "HS" instead of "CH and "SH".
 
-        Fortunately, there are no rules that use the '&' wildcard in the suffix pattern, so this bug is never triggered.
+      Fortunately, there are no rules that use the '&' wildcard in the suffix pattern,
+      so this bug is never triggered.
 
     * Wildcard '@':
 
@@ -171,15 +178,16 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
       However, SAM Reciter has two bugs in its matching code for this wildcard:
 
-      * In both the PREFIX and the SUFFIX matching code, the examination of the character after the 'H'
-        is done on the same character, and the two-letter matches cannot occur for that reason.
-      * In the SUFFIX version, the attempted code would match "HT", "HC", and "HS" if it weren't for
-        the previous bug. However, there are no rules that use the '&' wildcard in the suffix pattern,
-        so this bug is never triggered.
+      * In both the PREFIX and the SUFFIX matching code, the examination of the character after the
+        'H' is done on the same character, and the two-letter matches cannot occur for that reason.
+      * In the SUFFIX version, the attempted code would match "HT", "HC", and "HS" if it weren't
+        for the previous bug. However, there are no rules that use the '&' wildcard in the suffix
+        pattern, so this bug is never triggered.
 
       The net result is that only the single-character matches actually work.
 
-      Some 0.1% of words are affected by this bug. Some examples: brochure, chew, enthusiasm, parachute.
+      Some 0.1% of words are affected by this bug.
+      Some examples of affected words: brochure, chew, enthusiasm, parachute.
 
     * Wildcard '^':
 
@@ -188,7 +196,8 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
     * Wildcard '+':
 
-      This wildcard matches a subset of the vowels, specifically, any of the single letters E, I, or Y.
+      This wildcard matches a subset of the vowels, specifically, any of the single
+        letters E, I, or Y.
 
     * Wildcard ':':
 
@@ -198,11 +207,11 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
       This wildcard matches:
 
-      - The literal strings ER, ES, ED, ELY, ING, EFUL
-      - A single 'E' at the end of a word.
+      - The literal strings ER, ES, ED, ELY, ING, EFUL;
+      - A single 'E' at the end of the string, or before a non-word-character.
 
       This wildcard is implemented for suffixes only in the original SAM Reciter, and the original
-      ruleset only uses it in suffix patterns.
+        ruleset only uses it in suffix patterns.
     """
 
     # pylint: disable=too-many-return-statements, too-many-branches
@@ -390,7 +399,7 @@ def read_reciter_rules_into_dictionary(filename: str) -> dict[Optional[str], lis
     for key in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
         rules_dictionary[key] = []
 
-    key = None # Start processing rules with key value: None.
+    key = None  # Start processing rules with key value: None.
 
     # A "key" entry is a right-angle-bracket character (']') followed by a capital letter A..Z.
     key_regexp = re.compile(r"]([A-Z])")
