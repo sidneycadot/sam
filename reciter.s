@@ -1044,21 +1044,23 @@ APPLY_RULE:
         ldy     ZP_TEMP2                        ; Location of '=' character.
         lda     ZP_RB_LAST_CHAR_INDEX           ;
         sta     ZP_RECITER_BUFFER_INDEX         ; Update ZP_RECITER_BUFFER_INDEX.
-@1:     lda     (ZP_RULE_PTR),y                 ;
-        sta     ZP_TEMP1                        ;
-        and     #$7F                            ;
-        cmp     #'='                            ;
-        beq     @2                              ;
-        inc     ZP_SAM_BUFFER_INDEX             ;
-        ldx     ZP_SAM_BUFFER_INDEX             ;
+@loop:  lda     (ZP_RULE_PTR),y                 ; Load rule character.
+        sta     ZP_TEMP1                        ; Save to ZP_TEMP1, for end-of-loop sign bit check.
+        and     #$7F                            ; Make sure sign bit is not set.
+        cmp     #'='                            ; Is it an '=' character?
+        beq     @skip                           ; Yes, skip character copy.
+        inc     ZP_SAM_BUFFER_INDEX             ; Copy rule replacement character to the SAM_BUFFER,
+        ldx     ZP_SAM_BUFFER_INDEX             ; and increment ZP_SAM_BUFFER_INDEX.
         sta     SAM_BUFFER,x                    ;
-@2:     bit     ZP_TEMP1                        ;
-        bpl     @3                              ;
+@skip:  bit     ZP_TEMP1                        ; Was the most significant bit of the rule character set?
+        bpl     @proceed                        ; No: proceed to next rule character.
 
-        jmp     TRANSLATE_NEXT_CHARACTER        ;
+        jmp     TRANSLATE_NEXT_CHARACTER        ; Yes: Done copying; proceed with the next character.
 
-@3:     iny                                     ;
-        jmp     @1                              ;
+@proceed:
+
+        iny                                     ; Proceed to next rule character.
+        jmp     @loop                           ;
 
 ; ----------------------------------------------------------------------------
 
