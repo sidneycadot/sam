@@ -92,13 +92,9 @@ ZP_E8 := $E8                                    ;
 ZP_E9 := $E9                                    ;
 ZP_EA := $EA                                    ;
 
-;
-
 ZP_EB_PTR    := $EB                             ;
 ZP_EB_PTR_LO := $EB                             ;
 ZP_EB_PTR_HI := $EC                             ;
-
-;
 
 ZP_ED := $ED                                    ;
 ZP_EE := $EE                                    ;
@@ -110,9 +106,10 @@ ZP_F3 := $F3                                    ;
 ZP_F4 := $F4                                    ;
 ZP_F5 := $F5                                    ;
 ZP_F6 := $F6                                    ;
-ZP_F7 := $F7                                    ;
-ZP_F8 := $F8                                    ;
-ZP_F9 := $F9                                    ;
+
+ZP_INSERT_PHONEME_C := $F7                      ;
+ZP_INSERT_PHONEME_B := $F8                      ;
+ZP_INSERT_PHONEME_A := $F9                      ;
 
 ZP_SAVE_Y := $FA                                ;
 ZP_SAVE_X := $FB                                ;
@@ -641,7 +638,7 @@ SUB_RESTORE_AXY:
 
 INSERT_PHONEME:
 
-        ; Replace the three table entries at offset ZP_F6 by {ZP_F9, ZP_F8, ZP_F7} respectively.
+        ; Replace the three table entries at offset ZP_F6 by ZP_INSERT_PHONEME_{A,B,C} respectively.
         ; Shift all tables entries starting at ZP_F6 one index higher.
 
         jsr     SUB_SAVE_AXY                    ;
@@ -658,11 +655,11 @@ INSERT_PHONEME:
         cpx     ZP_F6                           ;
         bne     @loop                           ;
 
-        lda     ZP_F9                           ; Copy ZP_F9/ZP_F8/ZP_F7 at table offsets F6.
+        lda     ZP_INSERT_PHONEME_A             ; Copy ZP_INSERT_PHONEME_{A,B,C} into tables at offset F6.
         sta     T_PHONEME_A,x                   ;
-        lda     ZP_F8                           ;
+        lda     ZP_INSERT_PHONEME_B             ;
         sta     T_PHONEME_B,x                   ;
-        lda     ZP_F7                           ;
+        lda     ZP_INSERT_PHONEME_C             ;
         sta     T_PHONEME_C,x                   ;
         jsr     SUB_RESTORE_AXY                 ;
         rts                                     ;
@@ -816,7 +813,7 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
         bne     @2                              ;
         rts                                     ;
 
-@2:     sta     ZP_F9                           ;
+@2:     sta     ZP_INSERT_PHONEME_A             ;
         tay                                     ;
         lda     PhonemeFlags1,y                 ;
         tay                                     ;
@@ -828,19 +825,19 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
 @3:     tya                                     ;
         and     #$01                            ;
         bne     @4                              ;
-        inc     ZP_F9                           ;
-        ldy     ZP_F9                           ;
+        inc     ZP_INSERT_PHONEME_A             ;
+        ldy     ZP_INSERT_PHONEME_A             ;
         lda     T_PHONEME_C,x                   ;
-        sta     ZP_F7                           ;
+        sta     ZP_INSERT_PHONEME_C             ;
         lda     D3830,y                         ;
-        sta     ZP_F8                           ;
+        sta     ZP_INSERT_PHONEME_B             ;
         inx                                     ;
         stx     ZP_F6                           ;
         jsr     INSERT_PHONEME                  ;
-        inc     ZP_F9                           ;
-        ldy     ZP_F9                           ;
+        inc     ZP_INSERT_PHONEME_A             ;
+        ldy     ZP_INSERT_PHONEME_A             ;
         lda     D3830,y                         ;
-        sta     ZP_F8                           ;
+        sta     ZP_INSERT_PHONEME_B             ;
         inx                                     ;
         stx     ZP_F6                           ;
         jsr     INSERT_PHONEME                  ;
@@ -868,20 +865,20 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
         beq     @7                              ;
 @6:     ldx     ZP_FF                           ;
         lda     T_PHONEME_C,x                   ;
-        sta     ZP_F7                           ;
+        sta     ZP_INSERT_PHONEME_C             ;
         inx                                     ;
         stx     ZP_F6                           ;
-        ldx     ZP_F9                           ;
+        ldx     ZP_INSERT_PHONEME_A             ;
         inx                                     ;
-        stx     ZP_F9                           ;
+        stx     ZP_INSERT_PHONEME_A             ;
         lda     D3830,x                         ;
-        sta     ZP_F8                           ;
+        sta     ZP_INSERT_PHONEME_B             ;
         jsr     INSERT_PHONEME                  ;
         inc     ZP_F6                           ;
         inx                                     ;
-        stx     ZP_F9                           ;
+        stx     ZP_INSERT_PHONEME_A             ;
         lda     D3830,x                         ;
-        sta     ZP_F8                           ;
+        sta     ZP_INSERT_PHONEME_B             ;
         jsr     INSERT_PHONEME                  ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
@@ -920,7 +917,7 @@ cmp     #$FF                                    ; Is the phoneme $FF (the "end-o
         beq     @6                              ;
 
         lda     T_PHONEME_C,x                   ; Read corresponding stress value.
-        sta     ZP_F7                           ; Save stress table value.
+        sta     ZP_INSERT_PHONEME_C             ; Save stress table value.
         inx                                     ;
         stx     ZP_F6                           ; Save phoneme index + 1.
         lda     PhonemeFlags1,y                 ;
@@ -928,7 +925,7 @@ cmp     #$FF                                    ; Is the phoneme $FF (the "end-o
         beq     @5                              ;
 
         lda     #21                             ;
-@4:     sta     ZP_F9                           ; Value 20 or 21 stored here, depending on the phoneme flags.
+@4:     sta     ZP_INSERT_PHONEME_A             ; Value 20 or 21 stored here, depending on the phoneme flags.
         jsr     INSERT_PHONEME                  ;
         ldx     ZP_FF                           ;
         jmp     @25                             ;
@@ -942,9 +939,9 @@ cmp     #$FF                                    ; Is the phoneme $FF (the "end-o
         cmp     #$4E                            ;
         bne     @8                              ;
         lda     #$18                            ;
-@7:     sta     ZP_F9                           ;
+@7:     sta     ZP_INSERT_PHONEME_A             ;
         lda     T_PHONEME_C,x                   ;
-        sta     ZP_F7                           ;
+        sta     ZP_INSERT_PHONEME_C             ;
         lda     #$0D                            ;
         sta     T_PHONEME_A,x                   ;
         inx                                     ;
@@ -978,9 +975,9 @@ cmp     #$FF                                    ; Is the phoneme $FF (the "end-o
         beq     @11                             ;
         stx     ZP_F6                           ;
         lda     #0                              ;
-        sta     ZP_F7                           ;
+        sta     ZP_INSERT_PHONEME_C             ;
         lda     #$1F                            ;
-        sta     ZP_F9                           ;
+        sta     ZP_INSERT_PHONEME_A             ;
         jsr     INSERT_PHONEME                  ;
         jmp     @proceed_to_next_phoneme        ;
 
@@ -1113,12 +1110,12 @@ cmp     #$FF                                    ; Is the phoneme $FF (the "end-o
         beq     @28                             ;
         jmp     @31                             ;
 
-@30:    sty     ZP_F9                           ;
+@30:    sty     ZP_INSERT_PHONEME_A             ;
         inx                                     ;
         stx     ZP_F6                           ;
         dex                                     ;
         lda     T_PHONEME_C,x                   ;
-        sta     ZP_F7                           ;
+        sta     ZP_INSERT_PHONEME_C             ;
         jsr     INSERT_PHONEME                  ;
         jmp     @proceed_to_next_phoneme        ;
 
@@ -2219,9 +2216,9 @@ PLAY_SAMPLES_1:
         stx     ZP_F6                           ;
         lda     #0                              ;
         sta     ZP_F4                           ;
-        sta     ZP_F7                           ;
+        sta     ZP_INSERT_PHONEME_C             ;
         lda     #$FE                            ;
-        sta     ZP_F9                           ;
+        sta     ZP_INSERT_PHONEME_A             ;
         jsr     INSERT_PHONEME                  ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
@@ -2243,10 +2240,10 @@ PLAY_SAMPLES_1:
         inx                                     ;
         stx     ZP_F6                           ;
         lda     #$FE                            ;
-        sta     ZP_F9                           ;
+        sta     ZP_INSERT_PHONEME_A             ;
         lda     #0                              ;
         sta     ZP_F4                           ;
-        sta     ZP_F7                           ;
+        sta     ZP_INSERT_PHONEME_C             ;
         jsr     INSERT_PHONEME                  ;
         inx                                     ;
         stx     ZP_FF                           ;
