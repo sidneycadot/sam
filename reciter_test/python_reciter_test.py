@@ -5,8 +5,8 @@
 import argparse
 import re
 
-from reciter_python import Reciter
-from reciter_python_rewrite_rules import read_reciter_rules_into_dictionary
+from python_reciter import Reciter
+from python_reciter_rewrite_rules import read_reciter_rules_into_dictionary
 
 
 def main():
