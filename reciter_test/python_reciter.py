@@ -1,7 +1,7 @@
 """This module is a pure Python re-implementation of the "SAM Reciter" which translates English text to SAM-style phonemes.
 
 SAM is the Software Automatic Mouth, a speech synthesizer program from the 8-bit era. It was developed by Mark Barton
-and sold by Don't Ask Software from 1982 onwards.
+and sold by Don't Ask Software starting in 1982.
 """
 
 from typing import Optional
@@ -19,11 +19,11 @@ class Reciter:
         self.rules_dictionary = rules_dictionary
         self.fix_bugs = fix_bugs
 
-    def __call__(self, s: str) -> str:
+    def __call__(self, source: str) -> str:
 
         # Prepend a space character and map the individual characters to the range 0x00..0x5f.
         source_characters = [' ']
-        for character_code in map(ord, s):
+        for character_code in map(ord, source):
             character_code &= 0x7f
             if character_code >= 0x60:
                 character_code -= 0x20
@@ -50,8 +50,7 @@ class Reciter:
         # If the source character is a period that is not followed by a digit, the period denotes
         # an end of a sentence. Handle this by emitting a period pseudo-phoneme.
         if source_character == "." and \
-           not ((source_offset + 1) < len(source) and \
-                source[source_offset + 1] in ReciterCharacterClass.digits):
+           not ((source_offset + 1) < len(source) and source[source_offset + 1] in ReciterCharacterClass.digits):
             return (1, ".")
 
         if source_character in ReciterCharacterClass.miscellaneous_symbols_or_digits:
@@ -64,7 +63,7 @@ class Reciter:
         # We will now try all rules in the rule list in order; we accept and apply the first one that succeeds.
         for rule in rule_list:
             if rule.match(source, source_offset, self.fix_bugs):
-                # This rule matches! Apply its replacement.
+                # This rule matches; use its replacement string.
                 return (len(rule.stem), rule.replacement)
 
         # The rules were all tried, without a match. If the rules are properly written, this cannot happen,

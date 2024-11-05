@@ -21,7 +21,7 @@ def test_reciter_with_testcase_file(reciter: Reciter, filename: str):
     both of which may start or end with whitespace characters.
 
     The SOURCE_STRING will be translated to SAM phonemes by passing it to
-    the Reciter. The result will be compared with the SAM_PHONEMES_STRING.
+    the Reciter. The result will be then compared with the SAM_PHONEMES_STRING.
     """
 
     # Read the testcases.
