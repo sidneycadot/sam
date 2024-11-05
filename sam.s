@@ -209,27 +209,26 @@ SAM_SAY_PHONEMES:
         ; When we get here, it is expected that SAM_SAVE_ZP_ADDRESSES has been called
         ; previously to save addresses $E1..$FF.
         ;
-        ; The content of SAM_ZP_CD on enrty of this function is important.
+        ; The content of SAM_ZP_CD on entry of this function is important.
         ; If it is zero (the normal value), SAM_SAY_PHONEMES will restore zero
         ; page addresses ($E1..$FF range) and re-enable interrupts when done.
         ;
         ; To prevent this, the caller can set SAM_ZP_CD to a non-zero value prior
         ; to the call, which promises that the current call is not the last call.
-        ;
-        ; SAM_SAY_PHONEMES itself resets SAM_ZP_CD back to zero.
+        ; Note: SAM_SAY_PHONEMES itself resets SAM_ZP_CD back to zero.
 
         lda     #$FF                            ;
         sta     ERROR                           ;
-        jsr     PREP_1_BINARY_PHONEMES          ; Translate text-based SAM_BUFFER phonemes to binary.
+        jsr     PREP_1_PARSE_ASCII_PHONEMES     ; [~100 lines] Translate text-based SAM_BUFFER phonemes to binary phonemes.
         lda     ERROR                           ;
         cmp     #$FF                            ;
         bne     @wrap_up                        ;
 
-        jsr     PREP_2                          ; Prepare the phoneme rendering.
-        jsr     PREP_3                          ;
-        jsr     PREP_4                          ;
-        jsr     PREP_5                          ;
-        jsr     PREP_6                          ;
+        jsr     PREP_2                          ; [~250 lines] Unknown phoneme rendering step.
+        jsr     PREP_3                          ; [ ~30 lines] Unknown phoneme rendering step.
+        jsr     PREP_4                          ; [ ~20 lines] Unknown phoneme rendering step.
+        jsr     PREP_5                          ; [~160 lines] Unknown phoneme rendering step.
+        jsr     PREP_6                          ; [ ~80 lines] Unknown phoneme rendering step.
 
         lda     #0                              ; Time-critical section starts here:
         sta     NMIEN                           ; - Disable NMI interrupts.
@@ -251,8 +250,8 @@ SAM_SAY_PHONEMES:
 @lights_off:
 
         lda     #0                              ; Initialize lights off (default) mode.
-        sta     DMACTL                          ; Disable screen DMA by the ANTIC chip.
-                                                ; It will be restored by the VBLANK interrupt process once NMI interrupts are re-enabled.
+        sta     DMACTL                          ; Disable screen DMA by the ANTIC chip to allow predictable sample timing.
+                                                ; It will be restored by the OS VBLANK interrupt process once NMI interrupts are re-enabled.
         lda     #16                             ; Initialize self-modifying code values.
         sta     SMC_4210                        ;
         lda     #13                             ;
@@ -264,7 +263,7 @@ SAM_SAY_PHONEMES:
         lda     SPEED_L0                        ;
         sta     SMC_SPEED                       ;
 
-@join:  lda     D2262,x                         ;
+@join:  lda     T_PHONEME_A,x                   ;
         cmp     #80                             ;
         bcs     @3                              ;
         inx                                     ;
@@ -272,21 +271,21 @@ SAM_SAY_PHONEMES:
 
         beq     @4                              ;
 @3:     lda     #$FF                            ;
-        sta     D2262,x                         ;
+        sta     T_PHONEME_A,x                   ;
 
-@4:     jsr     PLAY_SAMPLES_1                  ;
+@4:     jsr     PLAY_SAMPLES_1                  ; [ ~60 lines]
 
         lda     #$FF                            ; Ensure there's a terminating phoneme.
-        sta     D2262 + $FE                     ;
+        sta     T_PHONEME_A + $FE               ;
 
-        jsr     PLAY_SAMPLES_2                  ;
+        jsr     PLAY_SAMPLES_2                  ; [ ~40 lines]. The realtime sample playback is called from here (~ 500 lines).
 
         ldx     #0                              ; Inspect SAM_ZP_CD to see if it is currently 0.
         cpx     SAM_ZP_CD                       ;
         stx     SAM_ZP_CD                       ; Always reset SAM_ZP_CD to zero.
         beq     @wrap_up                        ; If it was previously zero, restore ZP addresses and interrupts.
 
-        rts                                     ; Restoration of ZP addrsses and interrupts inhibited. Just return.
+        rts                                     ; Skip restoration of ZP addresses and interrupts as requested by caller; just return.
 
 @wrap_up:
 
@@ -456,9 +455,9 @@ SAM_COPY_BASIC_SAM_STRING:
         ; Three memory blocks of 256 bytes each.
         ; We conjucture that they are filled with garbage in the binary image.
 
-        ; We suspect that D2262 is the binary phoneme buffer.
+T_PHONEME_A:                                    ; The binary phonemes themselves.
 
-D2262:  .byte   $24,$07,$13,$34,$14,$01,$FE,$00,$1B,$31,$15,$00,$1C,$30,$15,$1B
+        .byte   $24,$07,$13,$34,$14,$01,$FE,$00,$1B,$31,$15,$00,$1C,$30,$15,$1B
         .byte   $00,$06,$26,$00,$20,$08,$1B,$01,$FE,$00,$31,$15,$00,$08,$1B,$00
         .byte   $0A,$00,$00,$20,$36,$37,$38,$05,$2A,$2B,$00,$20,$06,$1C,$23,$0A
         .byte   $20,$31,$15,$26,$0F,$04,$FE,$09,$1C,$00,$0A,$00,$39,$3A,$3B,$06
@@ -475,7 +474,10 @@ D2262:  .byte   $24,$07,$13,$34,$14,$01,$FE,$00,$1B,$31,$15,$00,$1C,$30,$15,$1B
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$FF,$00
 
-D2362:  .byte   $02,$0B,$09,$0E,$0D,$12,$02,$00,$08,$0F,$08,$00,$07,$0D,$09,$07
+
+T_PHONEME_B:                                    ; No idea what this is, yet.
+
+        .byte   $02,$0B,$09,$0E,$0D,$12,$02,$00,$08,$0F,$08,$00,$07,$0D,$09,$07
         .byte   $00,$0B,$06,$00,$02,$1C,$0B,$12,$02,$00,$0F,$08,$00,$0B,$07,$00
         .byte   $06,$00,$00,$02,$08,$01,$02,$0B,$06,$02,$00,$02,$0C,$07,$02,$06
         .byte   $02,$0C,$09,$06,$11,$08,$02,$13,$07,$00,$06,$00,$07,$01,$01,$0E
@@ -492,7 +494,10 @@ D2362:  .byte   $02,$0B,$09,$0E,$0D,$12,$02,$00,$08,$0F,$08,$00,$07,$0D,$09,$07
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
-D2462:  .byte   $04,$03,$00,$00,$00,$00,$00,$00,$04,$03,$03,$00,$00,$00,$00,$00
+
+T_PHONEME_C:                                    ; Stress / emphasis modulation (?)
+
+        .byte   $04,$03,$00,$00,$00,$00,$00,$00,$04,$03,$03,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$05,$04,$00,$00,$00,$00,$03,$03,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$05,$05,$05,$04,$00,$00,$00,$05,$04,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$05,$00,$00,$00,$00,$03,$03,$03,$02
@@ -598,13 +603,17 @@ PHONEMES_2ND:  .byte   "*****YHHEAHOHXXRXHXXXXH******XX**H*HHX*H*HH*****YYYWWW**
 
 ; ----------------------------------------------------------------------------
 
-D260E:  .byte   $00,$00,$00,$00,$00,$A4,$A4,$A4,$A4,$A4,$A4,$84,$84,$A4,$A4,$84
+PhonemeFlags1:                          ; The table is indexed by a binary phoneme index (0..77).
+
+        .byte   $00,$00,$00,$00,$00,$A4,$A4,$A4,$A4,$A4,$A4,$84,$84,$A4,$A4,$84
         .byte   $84,$84,$84,$84,$84,$84,$44,$44,$44,$44,$44,$4C,$4C,$4C,$48,$4C
         .byte   $40,$40,$40,$40,$40,$40,$44,$44,$44,$44,$48,$40,$4C,$44,$00,$00
         .byte   $B4,$B4,$B4,$94,$94,$94,$4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E
         .byte   $4E,$4E,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B
 
-D265C:  .byte   $80,$C1,$C1,$C1,$C1,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+PhonemeFlags2:                          ; This table is indexed by a binary phoneme index (0..77).
+
+        .byte   $80,$C1,$C1,$C1,$C1,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$10,$10,$10,$10,$08,$0C,$08,$04,$40
         .byte   $24,$20,$20,$24,$00,$00,$24,$20,$20,$24,$20,$20,$00,$20,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$04,$04,$00,$00,$00,$00
@@ -630,33 +639,37 @@ SUB_RESTORE_AXY:
 
 ; ----------------------------------------------------------------------------
 
-SHIFT_DATA:
+INSERT_PHONEME:
+
+        ; Replace the three table entries at offset ZP_F6 by {ZP_F9, ZP_F8, ZP_F7} respectively.
+        ; Shift all tables entries starting at ZP_F6 one index higher.
 
         jsr     SUB_SAVE_AXY                    ;
         ldx     #$FF                            ;
         ldy     #0                              ;
-@1:     dex                                     ;
+@loop:  dex                                     ;
         dey                                     ;
-        lda     D2262,x                         ;
-        sta     D2262,y                         ;
-        lda     D2362,x                         ;
-        sta     D2362,y                         ;
-        lda     D2462,x                         ;
-        sta     D2462,y                         ;
+        lda     T_PHONEME_A,x                   ;
+        sta     T_PHONEME_A,y                   ;
+        lda     T_PHONEME_B,x                   ;
+        sta     T_PHONEME_B,y                   ;
+        lda     T_PHONEME_C,x                   ;
+        sta     T_PHONEME_C,y                   ;
         cpx     ZP_F6                           ;
-        bne     @1                              ;
-        lda     ZP_F9                           ;
-        sta     D2262,x                         ;
+        bne     @loop                           ;
+
+        lda     ZP_F9                           ; Copy ZP_F9/ZP_F8/ZP_F7 at table offsets F6.
+        sta     T_PHONEME_A,x                   ;
         lda     ZP_F8                           ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
         lda     ZP_F7                           ;
-        sta     D2462,x                         ;
+        sta     T_PHONEME_C,x                   ;
         jsr     SUB_RESTORE_AXY                 ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
 
-PREP_1_BINARY_PHONEMES:                         ; First subroutine called by SAM_SAY_PHONEMES.
+PREP_1_PARSE_ASCII_PHONEMES:                    ; First subroutine called by SAM_SAY_PHONEMES.
                                                 ; This translates the SAM phonemes in ASCII to a binary representation.
 
         ldx     #0                              ; Initialize A, X, Y registers to zero.
@@ -665,105 +678,127 @@ PREP_1_BINARY_PHONEMES:                         ; First subroutine called by SAM
 
         sta     ZP_FF                           ; Set ZP_FF to 0.
 
-@init:  sta     D2462,y                         ; Initialize first 255 bytes of D4262 buffer to zero.
-        iny                                     ;
+@init:  sta     T_PHONEME_C,y                   ; Initialize first 255 bytes of T_PHONEME_C buffer to zero.
+        iny                                     ; This is the stress buffer.
         cpy     #$FF                            ;
         bne     @init                           ;
 
-@next_phoneme:
+@next_source_phoneme:
 
-        lda     SAM_BUFFER,x                    ; Are we seeing the end of the SAM_BUFFER?
+        lda     SAM_BUFFER,x                    ; Is this end-of-line marker in the SAM_BUFFER?
         cmp     #$9B                            ;
-        beq     @13                             ;
+        beq     @end_loop                       ;
 
-        sta     ZP_FE                           ; Copy 2-byte phoneme to ZP_FE, ZP_FD.
+        sta     ZP_FE                           ; Copy 2-byte phoneme to ZP_FE (first byte) and ZP_FD (second byte).
         inx                                     ;
         lda     SAM_BUFFER,x                    ;
         sta     ZP_FD                           ;
 
         ldy     #0                              ; Search phoneme tables.
-@3:     lda     PHONEMES_1ST,y                  ;
-        cmp     ZP_FE                           ;
-        bne     @4                              ;
-        lda     PHONEMES_2ND,y                  ;
-        cmp     #'*'                            ;
-        beq     @4                              ;
-        cmp     ZP_FD                           ;
-        beq     @found_phoneme                  ; Found phoneme match.
 
-@4:     iny                                     ;
-        cpy     #81                             ; End of ASCII phoneme table?
-        bne     @3                              ; Try next phoneme.
-        beq     @phoneme_not_found              ; Oops, phoneme not found.
+@twochar_phoneme_candidate_loop:
 
-@found_phoneme:
-
-        tya                                     ; Save phoneme into D2262 phoneme byte table.
-        ldy     ZP_FF                           ;
-        sta     D2262,y                         ;
-        inc     ZP_FF                           ;
-        inx                                     ;
-        jmp     @next_phoneme                   ; Process next phoneme.
-
-@phoneme_not_found:
-
-        ldy     #0                              ;
-@7:     lda     PHONEMES_2ND,y                  ;
-        cmp     #'*'                            ;
-        bne     @8                              ;
         lda     PHONEMES_1ST,y                  ;
         cmp     ZP_FE                           ;
-        beq     @9                              ;
-@8:     iny                                     ;
-        cpy     #81                             ;
-        bne     @7                              ;
-        beq     @10                             ;
+        bne     @no_match                       ;
+        lda     PHONEMES_2ND,y                  ;
+        cmp     #'*'                            ; If the second character is a '*', skip this phoneme candidate.
+        beq     @no_match                       ;
+        cmp     ZP_FD                           ;
+        beq     @found_twochar_phoneme          ; Two-byte phoneme match.
 
-@9:     tya                                     ; Found.
+@no_match:
+
+        iny                                     ;
+        cpy     #81                             ; End of ASCII phoneme table?
+        bne     @twochar_phoneme_candidate_loop ; Try next phoneme.
+        beq     @find_one_char_phoneme          ; No two-char phoneme match find, Try one-char phoneme.
+
+@found_twochar_phoneme:                         ; Found a full two-character match!
+
+        tya                                     ; Save phoneme index into T_PHONEME_A phoneme table.
         ldy     ZP_FF                           ;
-        sta     D2262,y                         ;
+        sta     T_PHONEME_A,y                   ;
         inc     ZP_FF                           ;
-        jmp     @next_phoneme                   ;
+        inx                                     ;
+        jmp     @next_source_phoneme            ; Process next source phoneme.
 
-@10:    lda     ZP_FE                           ; Not found.
+@find_one_char_phoneme:
+
+        ldy     #0                              ; Second pass for 1-character phonemes.
+
+@onechar_phoneme_candidate_loop:
+
+        lda     PHONEMES_2ND,y                  ;
+        cmp     #'*'                            ;
+        bne     @is_twochar                     ;
+        lda     PHONEMES_1ST,y                  ;
+        cmp     ZP_FE                           ;
+        beq     @found_onechar_phoneme          ;
+@is_twochar:
+        iny                                     ;
+        cpy     #81                             ;
+        bne     @onechar_phoneme_candidate_loop ;
+        beq     @find_stress_modifier           ;
+
+@found_onechar_phoneme:                         ; Found a full two-character match!
+
+        tya                                     ; Save phoneme index into T_PHONEME_A phoneme index table.
+        ldy     ZP_FF                           ;
+        sta     T_PHONEME_A,y                   ;
+        inc     ZP_FF                           ;
+        jmp     @next_source_phoneme            ;
+
+@find_stress_modifier:
+
+        lda     ZP_FE                           ;
         ldy     #8                              ;
-@11:    cmp     STRESS,y                        ;
-        beq     @12                             ;
+
+@stress_candidate_loop:
+
+        cmp     STRESS,y                        ;
+        beq     @found_stress_modifier          ;
         dey                                     ;
-        bne     @11                             ;
-        stx     ERROR                           ;
-        jsr     SAM_ERROR_SOUND                 ;
+        bne     @stress_candidate_loop          ;
+
+        stx     ERROR                           ; The buffer contains something that is not a two-character phoneme, not a one-character phoneme,
+        jsr     SAM_ERROR_SOUND                 ; and not a stress indicator. That, then, is an error.
         rts                                     ;
 
-@12:    tya                                     ;
+@found_stress_modifier:
+
+        tya                                     ;
         ldy     ZP_FF                           ;
         dey                                     ;
-        sta     D2462,y                         ;
-        jmp     @next_phoneme                   ;
+        sta     T_PHONEME_C,y                   ;
+        jmp     @next_source_phoneme            ;
 
-@13:    lda     #$FF                            ; Set D2262+$FF buffer to $FF.
+@end_loop:
+
+        lda     #$FF                            ; Setlast character of binary phoneme buffer to $FF.
         ldy     ZP_FF                           ;
-        sta     D2262,y                         ;
-        rts                                     ;
+        sta     T_PHONEME_A,y                   ;
+
+        rts                                     ; All done.
 
 ; ----------------------------------------------------------------------------
 
 PREP_4:                                         ; Called by SAM_SAY_PHONEMES.
 
         ldy     #0                              ;
-@loop:  lda     D2262,y                         ;
+@loop:  lda     T_PHONEME_A,y                   ;
         cmp     #$FF                            ;
         beq     @exit                           ;
         tax                                     ;
-        lda     D2462,y                         ;
+        lda     T_PHONEME_C,y                   ;
         beq     @2                              ;
         bmi     @2                              ;
         lda     D37E0,x                         ;
-        sta     D2362,y                         ;
+        sta     T_PHONEME_B,y                   ;
         jmp     @3                              ;
 
 @2:     lda     D3830,x                         ;
-        sta     D2362,y                         ;
+        sta     T_PHONEME_B,y                   ;
 @3:     iny                                     ;
         jmp     @loop                           ;
 
@@ -776,14 +811,14 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
         lda     #0                              ;
         sta     ZP_FF                           ;
 @1:     ldx     ZP_FF                           ;
-        lda     D2262,x                         ;
+        lda     T_PHONEME_A,x                   ;
         cmp     #$FF                            ;
         bne     @2                              ;
         rts                                     ;
 
 @2:     sta     ZP_F9                           ;
         tay                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         tay                                     ;
         and     #$02                            ;
         bne     @3                              ;
@@ -795,27 +830,27 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
         bne     @4                              ;
         inc     ZP_F9                           ;
         ldy     ZP_F9                           ;
-        lda     D2462,x                         ;
+        lda     T_PHONEME_C,x                   ;
         sta     ZP_F7                           ;
         lda     D3830,y                         ;
         sta     ZP_F8                           ;
         inx                                     ;
         stx     ZP_F6                           ;
-        jsr     SHIFT_DATA                      ;
+        jsr     INSERT_PHONEME                  ;
         inc     ZP_F9                           ;
         ldy     ZP_F9                           ;
         lda     D3830,y                         ;
         sta     ZP_F8                           ;
         inx                                     ;
         stx     ZP_F6                           ;
-        jsr     SHIFT_DATA                      ;
+        jsr     INSERT_PHONEME                  ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
         jmp     @1                              ;
 
 @4:     inx                                     ;
-        lda     D2262,x                         ;
+        lda     T_PHONEME_A,x                   ;
         beq     @4                              ;
         sta     ZP_F5                           ;
         cmp     #$FF                            ;
@@ -823,7 +858,7 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
         jmp     @6                              ;
 
 @5:     tay                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$08                            ;
         bne     @7                              ;
         lda     ZP_F5                           ;
@@ -832,7 +867,7 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
         cmp     #$25                            ;
         beq     @7                              ;
 @6:     ldx     ZP_FF                           ;
-        lda     D2462,x                         ;
+        lda     T_PHONEME_C,x                   ;
         sta     ZP_F7                           ;
         inx                                     ;
         stx     ZP_F6                           ;
@@ -841,13 +876,13 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
         stx     ZP_F9                           ;
         lda     D3830,x                         ;
         sta     ZP_F8                           ;
-        jsr     SHIFT_DATA                      ;
+        jsr     INSERT_PHONEME                  ;
         inc     ZP_F6                           ;
         inx                                     ;
         stx     ZP_F9                           ;
         lda     D3830,x                         ;
         sta     ZP_F8                           ;
-        jsr     SHIFT_DATA                      ;
+        jsr     INSERT_PHONEME                  ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
 @7:     inc     ZP_FF                           ;
@@ -857,50 +892,65 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
 
 PREP_2:                                         ; Called by SAM_SAY_PHONEMES.
 
-        lda     #0                              ;
+        ; Upon entry, the buffers T_PHONEME_A and T_PHONEME_C have been filled.
+
+        lda     #0                              ; Find first non-zero entry in the binary phoneme buffer.
         sta     ZP_FF                           ;
-@1:     ldx     ZP_FF                           ;
-        lda     D2262,x                         ;
-        bne     @2                              ;
+
+@find_next_nonzero_phoneme:                     ; Find the next non-zero binary phoneme.
+
+        ldx     ZP_FF                           ;
+        lda     T_PHONEME_A,x                         ;
+        bne     @nonzero_phoneme_found          ;
         inc     ZP_FF                           ;
-        jmp     @1                              ;
+        jmp     @find_next_nonzero_phoneme      ;
 
-@2:     cmp     #$FF                            ;
-        bne     @3                              ;
-        rts                                     ;
+@nonzero_phoneme_found:
 
-@3:     tay                                     ;
-        lda     D260E,y                         ;
+cmp     #$FF                                    ; Is the phoneme $FF (the "end-of-phonemes" marker) ?
+        bne     @process_phoneme                ;
+
+        rts                                     ; Last phoneme found; we're done.
+
+@process_phoneme:
+
+        tay                                     ;
+        lda     PhonemeFlags1,y         ; Read from Phoneme Table #1
         and     #$10                            ;
         beq     @6                              ;
-        lda     D2462,x                         ;
-        sta     ZP_F7                           ;
+
+        lda     T_PHONEME_C,x                   ; Read corresponding stress value.
+        sta     ZP_F7                           ; Save stress table value.
         inx                                     ;
-        stx     ZP_F6                           ;
-        lda     D260E,y                         ;
+        stx     ZP_F6                           ; Save phoneme index + 1.
+        lda     PhonemeFlags1,y                 ;
         and     #$20                            ;
         beq     @5                              ;
-        lda     #$15                            ;
-@4:     sta     ZP_F9                           ;
-        jsr     SHIFT_DATA                      ;
+
+        lda     #21                             ;
+@4:     sta     ZP_F9                           ; Value 20 or 21 stored here, depending on the phoneme flags.
+        jsr     INSERT_PHONEME                  ;
         ldx     ZP_FF                           ;
         jmp     @25                             ;
 
-@5:     lda     #$14                            ;
+@5:     lda     #20                             ;
         bne     @4                              ;
-@6:     lda     D2262,x                         ;
+
+        ; ---------------------------------------
+
+@6:     lda     T_PHONEME_A,x                   ;
         cmp     #$4E                            ;
         bne     @8                              ;
         lda     #$18                            ;
 @7:     sta     ZP_F9                           ;
-        lda     D2462,x                         ;
+        lda     T_PHONEME_C,x                   ;
         sta     ZP_F7                           ;
         lda     #$0D                            ;
-        sta     D2262,x                         ;
+        sta     T_PHONEME_A,x                   ;
         inx                                     ;
         stx     ZP_F6                           ;
-        jsr     SHIFT_DATA                      ;
-        jmp     @36                             ;
+        jsr     INSERT_PHONEME                  ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @8:     cmp     #$4F                            ;
         bne     @9                              ;
@@ -911,119 +961,119 @@ PREP_2:                                         ; Called by SAM_SAY_PHONEMES.
         lda     #$1C                            ;
         bne     @7                              ;
 @10:    tay                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
         beq     @11                             ;
-        lda     D2462,x                         ;
+        lda     T_PHONEME_C,x                   ;
         beq     @11                             ;
         inx                                     ;
-        lda     D2262,x                         ;
+        lda     T_PHONEME_A,x                   ;
         bne     @11                             ;
         inx                                     ;
-        ldy     D2262,x                         ;
-        lda     D260E,y                         ;
+        ldy     T_PHONEME_A,x                   ;
+        lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
         beq     @11                             ;
-        lda     D2462,x                         ;
+        lda     T_PHONEME_C,x                   ;
         beq     @11                             ;
         stx     ZP_F6                           ;
         lda     #0                              ;
         sta     ZP_F7                           ;
         lda     #$1F                            ;
         sta     ZP_F9                           ;
-        jsr     SHIFT_DATA                      ;
-        jmp     @36                             ;
+        jsr     INSERT_PHONEME                  ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @11:    ldx     ZP_FF                           ;
-        lda     D2262,x                         ;
+        lda     T_PHONEME_A,x                   ;
         cmp     #$17                            ;
         bne     @15                             ;
         dex                                     ;
-        lda     D2262,x                         ;
+        lda     T_PHONEME_A,x                   ;
         cmp     #$45                            ;
         bne     @12                             ;
         lda     #$2A                            ;
-        sta     D2262,x                         ;
+        sta     T_PHONEME_A,x                   ;
         jmp     @27                             ;
 
 @12:    cmp     #$39                            ;
         bne     @13                             ;
         lda     #$2C                            ;
-        sta     D2262,x                         ;
+        sta     T_PHONEME_A,x                   ;
         jmp     @29                             ;
 
 @13:    tay                                     ;
         inx                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
         bne     @14                             ;
-        jmp     @36                             ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @14:    lda     #$12                            ;
-        sta     D2262,x                         ;
-        jmp     @36                             ;
+        sta     T_PHONEME_A,x                   ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @15:    cmp     #$18                            ;
         bne     @17                             ;
         dex                                     ;
-        ldy     D2262,x                         ;
+        ldy     T_PHONEME_A,x                   ;
         inx                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
         bne     @16                             ;
-        jmp     @36                             ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @16:    lda     #$13                            ;
-        sta     D2262,x                         ;
-        jmp     @36                             ;
+        sta     T_PHONEME_A,x                   ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @17:    cmp     #$20                            ;
         bne     @19                             ;
         dex                                     ;
-        lda     D2262,x                         ;
+        lda     T_PHONEME_A,x                   ;
         cmp     #$3C                            ;
         beq     @18                             ;
-        jmp     @36                             ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @18:    inx                                     ;
         lda     #$26                            ;
-        sta     D2262,x                         ;
-        jmp     @36                             ;
+        sta     T_PHONEME_A,x                   ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @19:    cmp     #$48                            ;
         bne     @21                             ;
         inx                                     ;
-        ldy     D2262,x                         ;
+        ldy     T_PHONEME_A,x                   ;
         dex                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$20                            ;
         beq     @20                             ;
         jmp     @23                             ;
 
 @20:    lda     #$4B                            ;
-        sta     D2262,x                         ;
+        sta     T_PHONEME_A,x                   ;
         jmp     @23                             ;
 
 @21:    cmp     #$3C                            ;
         bne     @23                             ;
         inx                                     ;
-        ldy     D2262,x                         ;
+        ldy     T_PHONEME_A,x                   ;
         dex                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$20                            ;
         beq     @22                             ;
-        jmp     @36                             ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @22:    lda     #$3F                            ;
-        sta     D2262,x                         ;
-        jmp     @36                             ;
+        sta     T_PHONEME_A,x                   ;
+        jmp     @proceed_to_next_phoneme        ;
 
-@23:    ldy     D2262,x                         ;
-        lda     D260E,y                         ;
+@23:    ldy     T_PHONEME_A,x                   ;
+        lda     PhonemeFlags1,y                 ;
         and     #$01                            ;
         beq     @25                             ;
         dex                                     ;
-        lda     D2262,x                         ;
+        lda     T_PHONEME_A,x                   ;
         inx                                     ;
         cmp     #$20                            ;
         beq     @24                             ;
@@ -1033,23 +1083,25 @@ PREP_2:                                         ; Called by SAM_SAY_PHONEMES.
 @24:    sec                                     ;
         tya                                     ;
         sbc     #$0C                            ;
-        sta     D2262,x                         ;
-        jmp     @36                             ;
+        sta     T_PHONEME_A,x                   ;
+        jmp     @proceed_to_next_phoneme        ;
 
-@25:    lda     D2262,x                         ;
+        ; -------------------------
+
+@25:    lda     T_PHONEME_A,x                   ;
         cmp     #$35                            ;
         bne     @27                             ;
         dex                                     ;
-        ldy     D2262,x                         ;
+        ldy     T_PHONEME_A,x                   ;
         inx                                     ;
-        lda     D265C,y                         ;
+        lda     PhonemeFlags2,y                 ;
         and     #$04                            ;
         bne     @26                             ;
-        jmp     @36                             ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @26:    lda     #$10                            ;
-        sta     D2262,x                         ;
-        jmp     @36                             ;
+        sta     T_PHONEME_A,x                   ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @27:    cmp     #$2A                            ;
         bne     @29                             ;
@@ -1065,46 +1117,51 @@ PREP_2:                                         ; Called by SAM_SAY_PHONEMES.
         inx                                     ;
         stx     ZP_F6                           ;
         dex                                     ;
-        lda     D2462,x                         ;
+        lda     T_PHONEME_C,x                   ;
         sta     ZP_F7                           ;
-        jsr     SHIFT_DATA                      ;
-        jmp     @36                             ;
+        jsr     INSERT_PHONEME                  ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @31:    cmp     #$45                            ;
         bne     @32                             ;
         beq     @33                             ;
 @32:    cmp     #$39                            ;
         beq     @33                             ;
-        jmp     @36                             ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @33:    dex                                     ;
-        ldy     D2262,x                         ;
+        ldy     T_PHONEME_A,x                   ;
         inx                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
-        beq     @36                             ;
+        beq     @proceed_to_next_phoneme        ;
         inx                                     ;
-        lda     D2262,x                         ;
+        lda     T_PHONEME_A,x                   ;
         beq     @35                             ;
         tay                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
-        beq     @36                             ;
-        lda     D2462,x                         ;
-        bne     @36                             ;
+        beq     @proceed_to_next_phoneme        ;
+
+        lda     T_PHONEME_C,x                   ;
+        bne     @proceed_to_next_phoneme        ;
+
 @34:    ldx     ZP_FF                           ;
         lda     #$1E                            ;
-        sta     D2262,x                         ;
-        jmp     @36                             ;
+        sta     T_PHONEME_A,x                   ;
+        jmp     @proceed_to_next_phoneme        ;
 
 @35:    inx                                     ;
-        lda     D2262,x                         ;
+        lda     T_PHONEME_A,x                   ;
         tay                                     ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
         bne     @34                             ;
-@36:    inc     ZP_FF                           ;
-        jmp     @1                              ;
+
+@proceed_to_next_phoneme:
+
+        inc     ZP_FF                           ;
+        jmp     @find_next_nonzero_phoneme      ;
 
 ; ----------------------------------------------------------------------------
 
@@ -1113,26 +1170,26 @@ PREP_3:                                         ; Called by SAM_SAY_PHONEMES.
         lda     #0                              ;
         sta     ZP_FF                           ;
 @1:     ldx     ZP_FF                           ;
-        ldy     D2262,x                         ;
+        ldy     T_PHONEME_A,x                   ;
         cpy     #$FF                            ;
         bne     @2                              ;
         rts                                     ;
 
-@2:     lda     D260E,y                         ;
+@2:     lda     PhonemeFlags1,y                 ;
         and     #$40                            ;
         beq     @3                              ;
         inx                                     ;
-        ldy     D2262,x                         ;
-        lda     D260E,y                         ;
+        ldy     T_PHONEME_A,x                   ;
+        lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
         beq     @3                              ;
-        ldy     D2462,x                         ;
+        ldy     T_PHONEME_C,x                   ;
         beq     @3                              ;
         bmi     @3                              ;
         iny                                     ;
         dex                                     ;
         tya                                     ;
-        sta     D2462,x                         ;
+        sta     T_PHONEME_C,x                   ;
 @3:     inc     ZP_FF                           ;
         jmp     @1                              ;
 
@@ -1623,6 +1680,8 @@ SAM_RESTORE_ZP_ADDRESSES:
 
 ; ----------------------------------------------------------------------------
 
+SMC_PITCH := PLAY_SAMPLES_REALTIME + 105
+
 PLAY_SAMPLES_REALTIME:
 
         lda     D3EC0                           ;
@@ -1662,7 +1721,7 @@ L3FFF:  lda     D3EFC,y                         ;
         sta     ZP_E8                           ;
         ldy     ZP_F5                           ;
 
-L4013:  lda     D3600,y                         ;
+@1:     lda     D3600,y                         ;
         sta     D2F00,x                         ;
         lda     D3650,y                         ;
         sta     D3000,x                         ;
@@ -1677,17 +1736,15 @@ L4013:  lda     D3600,y                         ;
         lda     D3970,y                         ;
         sta     D3500,x                         ;
         clc                                     ;
-
-SMC_PITCH := * + 1                              ; Self-modifying code: argument of lda #imm below.
-
-        lda     #$40                            ;
+        lda     #$40                            ; [SMB_PITCH points to the argument of this lda #imm]
         adc     ZP_E8                           ;
         sta     D2E00,x                         ;
         inx                                     ;
         dec     ZP_E7                           ;
-        bne     L4013                           ;
+        bne     @1                              ;
         inc     ZP_E9                           ;
         bne     L3FE3                           ;
+
 L404E:  lda     #0                              ;
         sta     ZP_E9                           ;
         sta     ZP_EE                           ;
@@ -2002,6 +2059,9 @@ L424F:  clc                                     ;
 
 ; ----------------------------------------------------------------------------
 
+SMC_42B0 := PLAY_SAMPLES_REALTIME_SUB_2 + 70
+SMC_42DF := PLAY_SAMPLES_REALTIME_SUB_2 + 117
+
 PLAY_SAMPLES_REALTIME_SUB_2:
 
         sty     ZP_EE                           ;
@@ -2028,63 +2088,58 @@ PLAY_SAMPLES_REALTIME_SUB_2:
         lsr     a                               ;
         lsr     a                               ;
         lsr     a                               ;
-        jmp     L42C2                           ;
+        jmp     @6                              ;
 
 @1:     eor     #$FF                            ;
         tay                                     ;
-L4299:  lda     #8                              ;
+@2:     lda     #8                              ;
         sta     ZP_F5                           ;
         lda     (ZP_EB_PTR),y                   ;
-L429F:  asl     a                               ;
-        bcc     @100                            ;
+@3:     asl     a                               ;
+        bcc     @4                              ;
         ldx     ZP_F2                           ;
         stx     AUDC1                           ;
-        bne     @101                            ;
-@100:   ldx     #$15                            ;
+        bne     @5                              ;
+@4:     ldx     #$15                            ;
         stx     AUDC1                           ;
         nop                                     ;
-@101:
-
-SMC_42B0 := * + 1                               ; Self-modifying code: argument of ldx #imm below.
-
-        ldx     #13                             ;
+@5:
+        ldx     #13                             ; [SMB_42B0 points to the argument of this ldx #imm]
 @wait:  dex                                     ;
         bne     @wait                           ;
         dec     ZP_F5                           ;
-        bne     L429F                           ;
+        bne     @3                              ;
         iny                                     ;
-        bne     L4299                           ;
+        bne     @2                              ;
         lda     #1                              ;
         sta     ZP_E9                           ;
         ldy     ZP_EE                           ;
         rts                                     ;
 
-L42C2:  eor     #$FF                            ;
+@6:     eor     #$FF                            ;
         sta     ZP_E8                           ;
         ldy     ZP_FF                           ;
-L42C8:  lda     #8                              ;
+@7:     lda     #8                              ;
         sta     ZP_F5                           ;
         lda     (ZP_EB_PTR),y                   ;
-L42CE:  asl     a                               ;
-        bcc     @100                            ;
+@8:     asl     a                               ;
+        bcc     @9                              ;
         ldx     #$1A                            ;
         stx     AUDC1                           ;
-        bne     @101                            ;
-@100:   ldx     #$16                            ;
+        bne     @10                             ;
+@9:     ldx     #$16                            ;
         stx     AUDC1                           ;
         nop                                     ;
-@101:
+@10:
 
-SMC_42DF := * + 1                               ; Self-modifying code: argument of ldx #imm below.
-
-        ldx     #12                             ;
-@102:   dex                                     ;
-        bne     @102                            ;
+        ldx     #12                             ; [SMC_42DF points to the argument of this ldx #imm]
+@11:    dex                                     ;
+        bne     @11                             ;
         dec     ZP_F5                           ;
-        bne     L42CE                           ;
+        bne     @8                              ;
         iny                                     ;
         inc     ZP_E8                           ;
-        bne     L42C8                           ;
+        bne     @7                              ;
         lda     #1                              ;
         sta     ZP_E9                           ;
         sty     ZP_FF                           ;
@@ -2144,20 +2199,20 @@ PLAY_SAMPLES_1:
         stx     ZP_F4                           ;
         stx     ZP_FF                           ;
 @1:     ldx     ZP_FF                           ;
-        ldy     D2262,x                         ;
+        ldy     T_PHONEME_A,x                   ;
         cpy     #$FF                            ;
         bne     @2                              ;
         rts                                     ;
 
 @2:     clc                                     ;
         lda     ZP_F4                           ;
-        adc     D2362,x                         ;
+        adc     T_PHONEME_B,x                   ;
         sta     ZP_F4                           ;
         cmp     #$E8                            ;
         bcc     @3                              ;
         jmp     @6                              ;
 
-@3:     lda     D265C,y                         ;
+@3:     lda     PhonemeFlags2,y                 ;
         and     #$01                            ;
         beq     @4                              ;
         inx                                     ;
@@ -2167,7 +2222,7 @@ PLAY_SAMPLES_1:
         sta     ZP_F7                           ;
         lda     #$FE                            ;
         sta     ZP_F9                           ;
-        jsr     SHIFT_DATA                      ;
+        jsr     INSERT_PHONEME                  ;
         inc     ZP_FF                           ;
         inc     ZP_FF                           ;
         jmp     @1                              ;
@@ -2180,11 +2235,11 @@ PLAY_SAMPLES_1:
 
 @6:     ldx     ZP_F3                           ;
         lda     #$1F                            ;
-        sta     D2262,x                         ;
+        sta     T_PHONEME_A,x                   ;
         lda     #4                              ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
         lda     #0                              ;
-        sta     D2462,x                         ;
+        sta     T_PHONEME_C,x                   ;
         inx                                     ;
         stx     ZP_F6                           ;
         lda     #$FE                            ;
@@ -2192,7 +2247,7 @@ PLAY_SAMPLES_1:
         lda     #0                              ;
         sta     ZP_F4                           ;
         sta     ZP_F7                           ;
-        jsr     SHIFT_DATA                      ;
+        jsr     INSERT_PHONEME                  ;
         inx                                     ;
         stx     ZP_FF                           ;
         jmp     @1                              ;
@@ -2210,7 +2265,7 @@ PLAY_SAMPLES_2:
         lda     #0                              ;
         tax                                     ;
         tay                                     ;
-@1:     lda     D2262,x                         ;
+@1:     lda     T_PHONEME_A,x                   ;
         cmp     #$FF                            ;
         bne     @2                              ;
         lda     #$FF                            ; Handle case: $FF
@@ -2235,9 +2290,9 @@ PLAY_SAMPLES_2:
         jmp     @1                              ;
 
 @4:     sta     D3EC0,y                         ; Handle al other cases.
-        lda     D2362,x                         ;
+        lda     T_PHONEME_B,x                   ;
         sta     D3F38,y                         ;
-        lda     D2462,x                         ;
+        lda     T_PHONEME_C,x                   ;
         sta     D3EFC,y                         ;
         inx                                     ;
         iny                                     ;
@@ -2248,12 +2303,12 @@ PLAY_SAMPLES_2:
 PREP_5:                                         ; Called by SAM_SAY_PHONEMES.
 
         ldx     #0                              ;
-@1:     ldy     D2262,x                         ;
+@1:     ldy     T_PHONEME_A,x                   ;
         cpy     #$FF                            ;
         bne     @3                              ;
 @2:     jmp     @9                              ;
 
-@3:     lda     D265C,y                         ;
+@3:     lda     PhonemeFlags2,y                 ;
         and     #$01                            ;
         bne     @4                              ;
         inx                                     ;
@@ -2262,24 +2317,24 @@ PREP_5:                                         ; Called by SAM_SAY_PHONEMES.
 @4:     stx     ZP_FF                           ;
 @5:     dex                                     ;
         beq     @2                              ;
-        ldy     D2262,x                         ;
-        lda     D260E,y                         ;
+        ldy     T_PHONEME_A,x                   ;
+        lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
         beq     @5                              ;
-@6:     ldy     D2262,x                         ;
-        lda     D265C,y                         ;
+@6:     ldy     T_PHONEME_A,x                   ;
+        lda     PhonemeFlags2,y                 ;
         and     #$20                            ;
         beq     @7                              ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$04                            ;
         beq     @8                              ;
-@7:     lda     D2362,x                         ;
+@7:     lda     T_PHONEME_B,x                   ;
         sta     ZP_F5                           ;
         lsr     a                               ;
         clc                                     ;
-        adc     $F5                             ;
+        adc     ZP_F5                           ;
         adc     #1                              ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
 @8:     inx                                     ;
         cpx     ZP_FF                           ;
         bne     @6                              ;
@@ -2290,19 +2345,19 @@ PREP_5:                                         ; Called by SAM_SAY_PHONEMES.
         stx     ZP_FF                           ;
 
 @10:    ldx     ZP_FF                           ;
-        ldy     D2262,x                         ;
+        ldy     T_PHONEME_A,x                   ;
         cpy     #$FF                            ;
         bne     @11                             ;
         rts                                     ;
 
-@11:    lda     D260E,y                         ;
+@11:    lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
         bne     @12                             ;
         jmp     @18                             ;
 
 @12:    inx                                     ;
-        ldy     D2262,x                         ;
-        lda     D260E,y                         ;
+        ldy     T_PHONEME_A,x                   ;
+        lda     PhonemeFlags1,y                 ;
         sta     ZP_F5                           ;
         and     #$40                            ;
         beq     @15                             ;
@@ -2310,21 +2365,21 @@ PREP_5:                                         ; Called by SAM_SAY_PHONEMES.
         and     #$04                            ;
         beq     @14                             ;
         dex                                     ;
-        lda     D2362,x                         ;
+        lda     T_PHONEME_B,x                   ;
         sta     ZP_F5                           ;
         lsr     a                               ;
         lsr     a                               ;
         clc                                     ;
         adc     ZP_F5                           ;
         adc     #1                              ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
 @13:    jmp     @25                             ;
 
 @14:    lda     ZP_F5                           ;
         and     #$01                            ;
         beq     @13                             ;
         dex                                     ;
-        lda     D2362,x                         ;
+        lda     T_PHONEME_B,x                   ;
         tay                                     ;
         lsr     a                               ;
         lsr     a                               ;
@@ -2333,7 +2388,7 @@ PREP_5:                                         ; Called by SAM_SAY_PHONEMES.
         sec                                     ;
         tya                                     ;
         sbc     ZP_F5                           ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
         jmp     @25                             ;
 
 @15:    cpy     #$12                            ;
@@ -2343,69 +2398,69 @@ PREP_5:                                         ; Called by SAM_SAY_PHONEMES.
 @16:    jmp     @25                             ;
 
 @17:    inx                                     ;
-        ldy     D2262,x                         ;
-        lda     D260E,y                         ;
+        ldy     T_PHONEME_A,x                   ;
+        lda     PhonemeFlags1,y                 ;
         and     #$40                            ;
         beq     @16                             ;
         ldx     ZP_FF                           ;
-        lda     D2362,x                         ;
+        lda     T_PHONEME_B,x                   ;
         sec                                     ;
         sbc     #1                              ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
         jmp     @25                             ;
 
-@18:    lda     D265C,y                         ;
+@18:    lda     PhonemeFlags2,y                 ;
         and     #$08                            ;
         beq     @21                             ;
         inx                                     ;
-        ldy     D2262,x                         ;
-        lda     D260E,y                         ;
+        ldy     T_PHONEME_A,x                   ;
+        lda     PhonemeFlags1,y                 ;
         and     #$02                            ;
         bne     @20                             ;
 @19:    jmp     @25                             ;
 
 @20:    lda     #6                              ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
         dex                                     ;
         lda     #5                              ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
         jmp     @25                             ;
 
-@21:    lda     D260E,y                         ;
+@21:    lda     PhonemeFlags1,y                 ;
         and     #$02                            ;
         beq     @24                             ;
 @22:    inx                                     ;
-        ldy     D2262,x                         ;
+        ldy     T_PHONEME_A,x                   ;
         beq     @22                             ;
-        lda     D260E,y                         ;
+        lda     PhonemeFlags1,y                 ;
         and     #$02                            ;
         beq     @19                             ;
-        lda     D2362,x                         ;
+        lda     T_PHONEME_B,x                   ;
         lsr     a                               ;
         clc                                     ;
         adc     #1                              ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
         ldx     ZP_FF                           ;
-        lda     D2362,x                         ;
+        lda     T_PHONEME_B,x                   ;
         lsr     a                               ;
         clc                                     ;
         adc     #1                              ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
 @23:    jmp     @25                             ;
 
-@24:    lda     D265C,y                         ;
+@24:    lda     PhonemeFlags2,y                 ;
         and     #$10                            ;
         beq     @23                             ;
         dex                                     ;
-        ldy     D2262,x                         ;
-        lda     D260E,y                         ;
+        ldy     T_PHONEME_A,x                   ;
+        lda     PhonemeFlags1,y                 ;
         and     #$02                            ;
         beq     @23                             ;
         inx                                     ;
-        lda     D2362,x                         ;
+        lda     T_PHONEME_B,x                   ;
         sec                                     ;
         sbc     #2                              ;
-        sta     D2362,x                         ;
+        sta     T_PHONEME_B,x                   ;
 @25:    inc     ZP_FF                           ;
         jmp     @10                             ;
 
