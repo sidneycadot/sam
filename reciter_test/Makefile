@@ -5,7 +5,7 @@ TEST_OUTPUT_FILES=$(TEST_INPUT_FILES:%.txt=%.out)
 
 .PHONY : clean default test interactive
 
-default : interactive
+default : interactive testfiles
 
 interactive : reciter_test
 	@echo
@@ -17,6 +17,8 @@ interactive : reciter_test
 
 test : tests/MD5SUM
 	cd tests && md5sum -c MD5SUM
+
+testfiles: $(TEST_OUTPUT_FILES)
 
 %.out : %.txt reciter_test
 	sim65 reciter_test < $< > $@

@@ -35,7 +35,7 @@
 
 char SAM_BUFFER[256];
 
-void RECITER_VIA_SAM_FROM_MACHINE_CODE(void); // Implemented in machine code.
+void RECITER_VIA_SAM_FROM_MACHINE_LANGUAGE(void); // Implemented in machine code.
 
 static void fix_first_occurrence(char *s, char from, char to)
 {
@@ -81,7 +81,7 @@ int main(int argc, char ** argv)
         // Execute the SAM Reciter.
 
         fix_first_occurrence(SAM_BUFFER, 0x00, 0x9b); // Change ASCII NUL to Atari End-Of-Line
-        RECITER_VIA_SAM_FROM_MACHINE_CODE();
+        RECITER_VIA_SAM_FROM_MACHINE_LANGUAGE();
         fix_first_occurrence(SAM_BUFFER, 0x9b, 0x00); // Change Atari End-Of-Line to ASCII NUL.
 
         // Print output for the SAM Reciter.
