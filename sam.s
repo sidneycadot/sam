@@ -59,7 +59,7 @@
 
 ; Note: addresses $CB and $CC are used for two things:
 
-ZP_CB_PTR := $CB                                ; Used in "SAM_COPY_BASIC_SAM_STRING" as a cariable index counter,
+ZP_CB_PTR    := $CB                             ; Used in "SAM_COPY_BASIC_SAM_STRING" as a cariable index counter,
 ZP_CB_PTR_LO := $CB                             ; then as a pointer into the Atari BASIC variable value table.
 ZP_CB_PTR_HI := $CC                             ;
 
@@ -80,30 +80,32 @@ ZP_D0_PTR    := $D0                             ; Exclusively used in "SAM_COPY_
 ZP_D0_PTR_LO := $D0                             ; the content of SAM$.
 ZP_D0_PTR_HI := $D1                             ;
 
-ZP_E0 := $E0                                    ;
-ZP_E1 := $E1                                    ;
-ZP_E2 := $E2                                    ;
-ZP_E3 := $E3                                    ;
-ZP_E4 := $E4                                    ;
-ZP_E5 := $E5                                    ;
-ZP_E6 := $E6                                    ;
-ZP_E7 := $E7                                    ;
-ZP_E8 := $E8                                    ;
-ZP_E9 := $E9                                    ;
-ZP_EA := $EA                                    ;
+ZP_SAVE_RANGE := $E0                            ; For saving ZP addresses 0xE1 .. 0xff. Not used itself.
 
-ZP_EB_PTR    := $EB                             ;
-ZP_EB_PTR_LO := $EB                             ;
-ZP_EB_PTR_HI := $EC                             ;
+ZP_RT_TEMP1  := $E1                             ; 20 zero-page addresses used exclusively in the
+ZP_RT_TEMP2  := $E2                             ;
+ZP_RT_TEMP3  := $E3                             ;
+ZP_RT_TEMP4  := $E4                             ;
+ZP_RT_TEMP5  := $E5                             ;
+ZP_RT_TEMP6  := $E6                             ;
+ZP_RT_TEMP7  := $E7                             ;
+ZP_RT_TEMP8  := $E8                             ;
+ZP_RT_TEMP9  := $E9                             ;
+ZP_RT_TEMP10 := $EA                             ;
 
-ZP_ED := $ED                                    ;
-ZP_EE := $EE                                    ;
-ZP_EF := $EF                                    ;
-ZP_F0 := $F0                                    ;
-ZP_F1 := $F1                                    ;
-ZP_F2 := $F2                                    ;
-ZP_F3 := $F3                                    ;
-ZP_F4 := $F4                                    ;
+ZP_RT_PTR    := $EB                             ;
+ZP_RT_PTR_LO := $EB                             ;
+ZP_RT_PTR_HI := $EC                             ;
+
+ZP_RT_TEMP11 := $ED                             ;
+ZP_RT_TEMP12 := $EE                             ;
+ZP_RT_TEMP13 := $EF                             ;
+ZP_RT_TEMP14 := $F0                             ;
+ZP_RT_TEMP15 := $F1                             ;
+ZP_RT_TEMP16 := $F2                             ;
+ZP_RT_TEMP17 := $F3                             ;
+ZP_RT_TEMP18 := $F4                             ;
+
 ZP_F5 := $F5                                    ;
 
 ZP_INSERT_PHONEME_INDEX := $F6                  ;
@@ -1196,7 +1198,9 @@ PREP_3:                                         ; Called by SAM_SAY_PHONEMES.
         ;
         ; The byte values stored here could/should be zero.
 
-D2A4F:  .byte   $00,$82,$09,$00,$00,$00,$EB,$37,$A2,$31,$30,$00,$20,$11,$00,$80
+ZEROPAGE_SAVE_RANGE_BUFFER:
+
+        .byte   $00,$82,$09,$00,$00,$00,$EB,$37,$A2,$31,$30,$00,$20,$11,$00,$80
         .byte   $02,$04,$04,$80,$05,$00,$00,$20,$00,$06,$66,$00,$FE,$9B,$2E,$2C
 
 ; ----------------------------------------------------------------------------
@@ -1221,7 +1225,9 @@ L2AD0:  sta     D2A6F,x                         ; Nobody jumps here.
 
 ; ----------------------------------------------------------------------------
 
-D2B00:  .byte   $00,$00,$00,$10,$10,$10,$10,$10,$10,$20,$20,$20,$20,$20,$20,$30
+        ; Read-only table at $2B00.
+
+RTAB1:  .byte   $00,$00,$00,$10,$10,$10,$10,$10,$10,$20,$20,$20,$20,$20,$20,$30
         .byte   $30,$30,$30,$30,$30,$30,$40,$40,$40,$40,$40,$40,$40,$50,$50,$50
         .byte   $50,$50,$50,$50,$50,$60,$60,$60,$60,$60,$60,$60,$60,$60,$60,$60
         .byte   $60,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70
@@ -1238,9 +1244,9 @@ D2B00:  .byte   $00,$00,$00,$10,$10,$10,$10,$10,$10,$20,$20,$20,$20,$20,$20,$30
         .byte   $B0,$B0,$B0,$B0,$C0,$C0,$C0,$C0,$C0,$C0,$C0,$D0,$D0,$D0,$D0,$D0
         .byte   $D0,$D0,$E0,$E0,$E0,$E0,$E0,$E0,$F0,$F0,$F0,$F0,$F0,$F0,$00,$00
 
-; ----------------------------------------------------------------------------
+        ; Read-only table at $2C00.
 
-D2C00:  .byte   $90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90
+RTAB2:  .byte   $90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90
         .byte   $90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90
         .byte   $90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90
         .byte   $90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90
@@ -1257,9 +1263,9 @@ D2C00:  .byte   $90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90
         .byte   $70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70
         .byte   $70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70,$70
 
-; ----------------------------------------------------------------------------
+        ; Read-only table at $2D00.
 
-D2D00:  .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+RTAB3:  .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$01,$01,$02,$02,$03,$03,$04,$04,$05,$05,$06,$06,$07,$07
         .byte   $00,$01,$02,$03,$04,$05,$06,$07,$08,$09,$0A,$0B,$0C,$0D,$0E,$0F
         .byte   $00,$01,$03,$04,$06,$07,$09,$0A,$0C,$0D,$0F,$10,$12,$13,$15,$16
@@ -1277,6 +1283,8 @@ D2D00:  .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$FF,$FF,$FE,$FE,$FD,$FD,$FC,$FC,$FB,$FB,$FA,$FA,$F9,$F9,$F8
 
 ; ----------------------------------------------------------------------------
+
+        ; This table is not read-only.
 
 D2E00:  .byte   $2C,$2C,$2A,$28,$27,$26,$25,$23,$23,$25,$27,$29,$2B,$2E,$31,$33
         .byte   $35,$38,$38,$39,$3A,$3B,$3C,$3D,$3E,$3E,$3F,$40,$41,$42,$43,$44
@@ -1297,10 +1305,12 @@ D2E00:  .byte   $2C,$2C,$2A,$28,$27,$26,$25,$23,$23,$25,$27,$29,$2B,$2E,$31,$33
 
 ; ----------------------------------------------------------------------------
 
-        ; The following three tables, 160 bytes each, only seem to have their
+        ; The following three tables, 256 bytes each, only seem to have their
         ; first 162 values used.
+        ;
+        ; Addresses: $2F00, $3000, $3100.
 
-D2F00:  .byte   $0E,$0E,$10,$13,$13,$13,$13,$13,$13,$13,$13,$13,$12,$12,$11,$10
+XTAB1:  .byte   $0E,$0E,$10,$13,$13,$13,$13,$13,$13,$13,$13,$13,$12,$12,$11,$10
         .byte   $10,$10,$10,$10,$10,$10,$10,$11,$11,$12,$12,$12,$12,$12,$12,$12
         .byte   $12,$12,$11,$11,$10,$0F,$0F,$0E,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D
         .byte   $0E,$10,$11,$13,$13,$13,$13,$13,$13,$13,$13,$13,$13,$13,$13,$13
@@ -1317,7 +1327,7 @@ D2F00:  .byte   $0E,$0E,$10,$13,$13,$13,$13,$13,$13,$13,$13,$13,$12,$12,$11,$10
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
-D3000:  .byte   $49,$49,$46,$43,$43,$43,$43,$43,$43,$43,$43,$3D,$37,$31,$2B,$25
+XTAB2:  .byte   $49,$49,$46,$43,$43,$43,$43,$43,$43,$43,$43,$3D,$37,$31,$2B,$25
         .byte   $25,$25,$25,$25,$25,$24,$23,$21,$20,$1E,$1E,$1E,$1E,$1E,$1E,$1E
         .byte   $1E,$1E,$1E,$1E,$1E,$1E,$1E,$1E,$1D,$1D,$1D,$1D,$1D,$1D,$1D,$1D
         .byte   $26,$30,$39,$43,$43,$43,$43,$43,$43,$43,$43,$43,$43,$43,$43,$43
@@ -1334,7 +1344,7 @@ D3000:  .byte   $49,$49,$46,$43,$43,$43,$43,$43,$43,$43,$43,$3D,$37,$31,$2B,$25
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
-D3100:  .byte   $5D,$5D,$5C,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5E,$62,$66,$6A,$6E
+XTAB3:  .byte   $5D,$5D,$5C,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5E,$62,$66,$6A,$6E
         .byte   $6E,$6E,$6E,$6E,$6E,$6A,$66,$61,$5D,$58,$58,$58,$58,$58,$58,$58
         .byte   $58,$57,$56,$55,$54,$53,$52,$51,$50,$50,$50,$50,$50,$50,$50,$50
         .byte   $52,$55,$58,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B
@@ -1620,31 +1630,31 @@ D3F84:  .byte   $00,$00,$E0,$E6,$EC,$F3,$F9,$00,$06,$0C,$06
 PLAY_SAMPLES_REALTIME_SUB_1:
 
         ldy     #0                              ;
-        bit     ZP_F2                           ;
+        bit     ZP_RT_TEMP16                    ;
         bpl     @1                              ;
         sec                                     ;
         lda     #0                              ;
-        sbc     ZP_F2                           ;
-        sta     ZP_F2                           ;
+        sbc     ZP_RT_TEMP16                    ;
+        sta     ZP_RT_TEMP16                    ;
         ldy     #$80                            ;
-@1:     sty     ZP_EF                           ;
+@1:     sty     ZP_RT_TEMP13                    ;
         lda     #0                              ;
         ldx     #8                              ;
-@2:     asl     ZP_F2                           ;
+@2:     asl     ZP_RT_TEMP16                           ;
         rol     a                               ;
-        cmp     ZP_F1                           ;
+        cmp     ZP_RT_TEMP15                    ;
         bcc     @3                              ;
-        sbc     ZP_F1                           ;
-        inc     ZP_F2                           ;
+        sbc     ZP_RT_TEMP15                    ;
+        inc     ZP_RT_TEMP16                    ;
 @3:     dex                                     ;
         bne     @2                              ;
-        sta     ZP_F0                           ;
-        bit     ZP_EF                           ;
+        sta     ZP_RT_TEMP14                    ;
+        bit     ZP_RT_TEMP13                    ;
         bpl     @4                              ;
         sec                                     ;
         lda     #0                              ;
-        sbc     ZP_F2                           ;
-        sta     ZP_F2                           ;
+        sbc     ZP_RT_TEMP16                    ;
+        sta     ZP_RT_TEMP16                    ;
 @4:     rts                                     ;
 
 ; ----------------------------------------------------------------------------
@@ -1655,8 +1665,8 @@ SAM_SAVE_ZP_ADDRESSES:
         ; Note that address $E0 is not saved. (Bug?)
 
         ldx     #$1F                            ;
-@loop:  lda     ZP_E0,x                         ;
-        sta     D2A4F,x                         ;
+@loop:  lda     ZP_SAVE_RANGE,x                 ;
+        sta     ZEROPAGE_SAVE_RANGE_BUFFER,x    ;
         dex                                     ;
         bne     @loop                           ;
         rts                                     ;
@@ -1669,8 +1679,8 @@ SAM_RESTORE_ZP_ADDRESSES:
         ; Note that address $E0 is not restored. (Bug?)
 
         ldx     #$1F                            ;
-@loop:  lda     D2A4F,x                         ;
-        sta     ZP_E0,x                         ;
+@loop:  lda     ZEROPAGE_SAVE_RANGE_BUFFER,x    ;
+        sta     ZP_SAVE_RANGE,x                 ;
         dex                                     ;
         bne     @loop                           ;
         rts                                     ;
@@ -1688,8 +1698,8 @@ PLAY_SAMPLES_REALTIME:
 
 @1:     lda     #0                              ;
         tax                                     ;
-        sta     ZP_E9                           ;
-L3FE3:  ldy     ZP_E9                           ;
+        sta     ZP_RT_TEMP9                     ;
+L3FE3:  ldy     ZP_RT_TEMP9                     ;
         lda     D3EC0,y                         ;
         sta     ZP_F5                           ;
         cmp     #$FF                            ;
@@ -1709,21 +1719,21 @@ L3FE3:  ldy     ZP_E9                           ;
 ; ----------------------------------------------------------------------------
 
 L3FFF:  lda     D3EFC,y                         ;
-        sta     ZP_E8                           ;
+        sta     ZP_RT_TEMP8                     ;
         lda     D3F38,y                         ;
-        sta     ZP_E7                           ;
-        ldy     ZP_E8                           ;
+        sta     ZP_RT_TEMP7                     ;
+        ldy     ZP_RT_TEMP8                     ;
         iny                                     ;
         lda     D3F84,y                         ;
-        sta     ZP_E8                           ;
+        sta     ZP_RT_TEMP8                     ;
         ldy     ZP_F5                           ;
 
 @1:     lda     D3600,y                         ;
-        sta     D2F00,x                         ;
+        sta     XTAB1,x                         ;
         lda     D3650,y                         ;
-        sta     D3000,x                         ;
+        sta     XTAB2,x                         ;
         lda     D36A0,y                         ;
-        sta     D3100,x                         ;
+        sta     XTAB3,x                         ;
         lda     D36F0,y                         ;
         sta     D3200,x                         ;
         lda     D3740,y                         ;
@@ -1732,19 +1742,20 @@ L3FFF:  lda     D3EFC,y                         ;
         sta     D3400,x                         ;
         lda     D3970,y                         ;
         sta     D3500,x                         ;
+
         clc                                     ;
         lda     #$40                            ; [SMB_PITCH points to the argument of this lda #imm]
-        adc     ZP_E8                           ;
+        adc     ZP_RT_TEMP8                     ;
         sta     D2E00,x                         ;
         inx                                     ;
-        dec     ZP_E7                           ;
+        dec     ZP_RT_TEMP7                     ;
         bne     @1                              ;
-        inc     ZP_E9                           ;
+        inc     ZP_RT_TEMP9                     ;
         bne     L3FE3                           ;
 
 L404E:  lda     #0                              ;
-        sta     ZP_E9                           ;
-        sta     ZP_EE                           ;
+        sta     ZP_RT_TEMP9                     ;
+        sta     ZP_RT_TEMP12                    ;
         tax                                     ;
 @900:   ldy     D3EC0,x                         ;
         inx                                     ;
@@ -1761,139 +1772,139 @@ L404E:  lda     #0                              ;
         beq     @102                            ;
         bcc     @101                            ;
         lda     D3880,y                         ;
-        sta     ZP_E8                           ;
+        sta     ZP_RT_TEMP8                     ;
         lda     D38D0,y                         ;
-        sta     ZP_E7                           ;
+        sta     ZP_RT_TEMP7                     ;
         jmp     @103                            ;
 
 @101:   lda     D38D0,x                         ;
-        sta     ZP_E8                           ;
+        sta     ZP_RT_TEMP8                     ;
         lda     D3880,x                         ;
-        sta     ZP_E7                           ;
+        sta     ZP_RT_TEMP7                     ;
         jmp     @103                            ;
 
 @102:   lda     D3880,y                         ;
-        sta     ZP_E8                           ;
+        sta     ZP_RT_TEMP8                     ;
         lda     D3880,x                         ;
-        sta     ZP_E7                           ;
+        sta     ZP_RT_TEMP7                     ;
 @103:   clc                                     ;
-        lda     ZP_EE                           ;
-        ldy     ZP_E9                           ;
+        lda     ZP_RT_TEMP12                    ;
+        ldy     ZP_RT_TEMP9                     ;
         adc     D3F38,y                         ;
-        sta     ZP_EE                           ;
-        adc     ZP_E7                           ;
-        sta     ZP_EA                           ;
+        sta     ZP_RT_TEMP12                    ;
+        adc     ZP_RT_TEMP7                     ;
+        sta     ZP_RT_TEMP10                    ;
         lda     #<D2E00                         ;
-        sta     ZP_EB_PTR_LO                    ;
+        sta     ZP_RT_PTR_LO                    ;
         lda     #>D2E00                         ;
-        sta     ZP_EB_PTR_HI                    ;
+        sta     ZP_RT_PTR_HI                    ;
         sec                                     ;
-        lda     ZP_EE                           ;
-        sbc     ZP_E8                           ;
-        sta     ZP_E6                           ;
+        lda     ZP_RT_TEMP12                    ;
+        sbc     ZP_RT_TEMP8                     ;
+        sta     ZP_RT_TEMP6                     ;
         clc                                     ;
-        lda     ZP_E8                           ;
-        adc     ZP_E7                           ;
-        sta     ZP_E3                           ;
+        lda     ZP_RT_TEMP8                     ;
+        adc     ZP_RT_TEMP7                     ;
+        sta     ZP_RT_TEMP3                     ;
         tax                                     ;
         dex                                     ;
         dex                                     ;
         bpl     @150                            ;
         jmp     @500                            ;
 
-@150:   lda     ZP_E3                           ;
-        sta     ZP_E5                           ;
-        lda     ZP_EB_PTR_HI                    ;
+@150:   lda     ZP_RT_TEMP3                     ;
+        sta     ZP_RT_TEMP5                     ;
+        lda     ZP_RT_PTR_HI                    ;
         cmp     #>D2E00                         ;
         bne     @200                            ;
-        ldy     ZP_E9                           ;
+        ldy     ZP_RT_TEMP9                     ;
         lda     D3F38,y                         ;
         lsr     a                               ;
-        sta     ZP_E1                           ;
+        sta     ZP_RT_TEMP1                     ;
         iny                                     ;
         lda     D3F38,y                         ;
         lsr     a                               ;
-        sta     ZP_E2                           ;
+        sta     ZP_RT_TEMP2                     ;
         clc                                     ;
-        lda     ZP_E1                           ;
-        adc     ZP_E2                           ;
-        sta     ZP_E5                           ;
+        lda     ZP_RT_TEMP1                     ;
+        adc     ZP_RT_TEMP2                     ;
+        sta     ZP_RT_TEMP5                     ;
         clc                                     ;
-        lda     ZP_EE                           ;
-        adc     ZP_E2                           ;
-        sta     ZP_E2                           ;
+        lda     ZP_RT_TEMP12                    ;
+        adc     ZP_RT_TEMP2                     ;
+        sta     ZP_RT_TEMP2                     ;
         sec                                     ;
-        lda     ZP_EE                           ;
-        sbc     ZP_E1                           ;
-        sta     ZP_E1                           ;
-        ldy     ZP_E2                           ;
-        lda     (ZP_EB_PTR),y                   ;
+        lda     ZP_RT_TEMP12                    ;
+        sbc     ZP_RT_TEMP1                     ;
+        sta     ZP_RT_TEMP1                     ;
+        ldy     ZP_RT_TEMP2                     ;
+        lda     (ZP_RT_PTR),y                   ;
         sec                                     ;
-        ldy     ZP_E1                           ;
-        sbc     (ZP_EB_PTR),y                   ;
-        sta     ZP_F2                           ;
-        lda     ZP_E5                           ;
-        sta     ZP_F1                           ;
+        ldy     ZP_RT_TEMP1                     ;
+        sbc     (ZP_RT_PTR),y                   ;
+        sta     ZP_RT_TEMP16                    ;
+        lda     ZP_RT_TEMP5                     ;
+        sta     ZP_RT_TEMP15                    ;
         jsr     PLAY_SAMPLES_REALTIME_SUB_1     ;
-        ldx     ZP_E5                           ;
-        ldy     ZP_E1                           ;
+        ldx     ZP_RT_TEMP5                     ;
+        ldy     ZP_RT_TEMP1                     ;
         jmp     @199                            ;
 
-@200:   ldy     ZP_EA                           ;
+@200:   ldy     ZP_RT_TEMP10                    ;
         sec                                     ;
-        lda     (ZP_EB_PTR),y                   ;
-        ldy     ZP_E6                           ;
-        sbc     (ZP_EB_PTR),y                   ;
-        sta     ZP_F2                           ;
-        lda     ZP_E5                           ;
-        sta     ZP_F1                           ;
+        lda     (ZP_RT_PTR),y                   ;
+        ldy     ZP_RT_TEMP6                     ;
+        sbc     (ZP_RT_PTR),y                   ;
+        sta     ZP_RT_TEMP16                    ;
+        lda     ZP_RT_TEMP5                     ;
+        sta     ZP_RT_TEMP15                    ;
         jsr     PLAY_SAMPLES_REALTIME_SUB_1     ;
-        ldx     ZP_E5                           ;
-        ldy     ZP_E6                           ;
+        ldx     ZP_RT_TEMP5                     ;
+        ldy     ZP_RT_TEMP6                     ;
 @199:   lda     #0                              ;
         sta     ZP_F5                           ;
         clc                                     ;
-@399:   lda     (ZP_EB_PTR),y                   ;
-        adc     ZP_F2                           ;
-        sta     ZP_ED                           ;
+@399:   lda     (ZP_RT_PTR),y                   ;
+        adc     ZP_RT_TEMP16                    ;
+        sta     ZP_RT_TEMP11                    ;
         iny                                     ;
         dex                                     ;
         beq     @402                            ;
         clc                                     ;
         lda     ZP_F5                           ;
-        adc     ZP_F0                           ;
+        adc     ZP_RT_TEMP14                    ;
         sta     ZP_F5                           ;
-        cmp     ZP_E5                           ;
+        cmp     ZP_RT_TEMP5                     ;
         bcc     @401                            ;
         lda     ZP_F5                           ;
-        sbc     ZP_E5                           ;
+        sbc     ZP_RT_TEMP5                     ;
         sta     ZP_F5                           ;
-        bit     ZP_EF                           ;
+        bit     ZP_RT_TEMP13                    ;
         bmi     @400                            ;
-        inc     ZP_ED                           ;
+        inc     ZP_RT_TEMP11                    ;
         bne     @401                            ;
-@400:   dec     ZP_ED                           ;
-@401:   lda     ZP_ED                           ;
-        sta     (ZP_EB_PTR),y                   ;
+@400:   dec     ZP_RT_TEMP11                    ;
+@401:   lda     ZP_RT_TEMP11                    ;
+        sta     (ZP_RT_PTR),y                   ;
         clc                                     ;
         bcc     @399                            ;
-@402:   inc     ZP_EB_PTR_HI                    ;
-        lda     ZP_EB_PTR_HI                    ;
+@402:   inc     ZP_RT_PTR_HI                    ;
+        lda     ZP_RT_PTR_HI                    ;
         cmp     #>D3500                         ;
         beq     @500                            ;
         jmp     @150                            ;
 
-@500:   inc     ZP_E9                           ;
-        ldx     ZP_E9                           ;
+@500:   inc     ZP_RT_TEMP9                     ;
+        ldx     ZP_RT_TEMP9                     ;
         jmp     @900                            ;
 
-@600:   lda     ZP_EE                           ;
+@600:   lda     ZP_RT_TEMP12                    ;
         clc                                     ;
-        ldy     ZP_E9                           ;
+        ldy     ZP_RT_TEMP9                     ;
         adc     D3F38,y                         ;
-        sta     ZP_ED                           ;
+        sta     ZP_RT_TEMP11                    ;
         ldx     #0                              ;
-@798:   lda     D2F00,x                         ;
+@798:   lda     XTAB1,x                         ;
         lsr     a                               ;
         sta     ZP_F5                           ;
         sec                                     ;
@@ -1903,12 +1914,12 @@ L404E:  lda     #0                              ;
         dex                                     ;
         bne     @798                            ;
         lda     #0                              ;
-        sta     ZP_E8                           ;
-        sta     ZP_E7                           ;
-        sta     ZP_E6                           ;
-        sta     ZP_EE                           ;
+        sta     ZP_RT_TEMP8                     ;
+        sta     ZP_RT_TEMP7                     ;
+        sta     ZP_RT_TEMP6                     ;
+        sta     ZP_RT_TEMP12                    ;
         lda     #$48                            ;
-        sta     ZP_EA                           ;
+        sta     ZP_RT_TEMP10                    ;
 
         ; --- Apply sample gain curve.
 
@@ -1916,19 +1927,19 @@ L404E:  lda     #0                              ;
         sta     ZP_F5                           ;
 
         lda     #<D3200                         ;
-        sta     ZP_EB_PTR_LO                    ;
+        sta     ZP_RT_PTR_LO                    ;
         lda     #>D3200                         ;
-        sta     ZP_EB_PTR_HI                    ;
+        sta     ZP_RT_PTR_HI                    ;
 
 @799:   ldy     #0                              ; Copy a page, applying the sample gain curve.
-@800:   lda     (ZP_EB_PTR),y                   ;
+@800:   lda     (ZP_RT_PTR),y                   ;
         tax                                     ;
         lda     D3F74_GAIN,x                    ;
-        sta     (ZP_EB_PTR),y                   ;
+        sta     (ZP_RT_PTR),y                   ;
         dey                                     ;
         bne     @800                            ;
 
-        inc     ZP_EB_PTR_HI                    ;
+        inc     ZP_RT_PTR_HI                    ;
         dec     ZP_F5                           ;
         bne     @799                            ;
 
@@ -1936,7 +1947,7 @@ L404E:  lda     #0                              ;
 
         ldy     #0                              ;
         lda     D2E00,y                         ;
-        sta     ZP_E9                           ;
+        sta     ZP_RT_TEMP9                     ;
         tax                                     ;
         lsr     a                               ;
         lsr     a                               ;
@@ -1944,7 +1955,7 @@ L404E:  lda     #0                              ;
         sec                                     ;
         txa                                     ;
         sbc     ZP_F5                           ;
-        sta     ZP_E3                           ;
+        sta     ZP_RT_TEMP3                     ;
         jmp     L41CE                           ;
 
 ; ----------------------------------------------------------------------------
@@ -1952,36 +1963,36 @@ L404E:  lda     #0                              ;
 L41C2:  jsr     PLAY_SAMPLES_REALTIME_SUB_2     ;
         iny                                     ;
         iny                                     ;
-        dec     ZP_ED                           ;
-        dec     ZP_ED                           ;
+        dec     ZP_RT_TEMP11                    ;
+        dec     ZP_RT_TEMP11                    ;
         jmp     L421B                           ;
 
 ; ----------------------------------------------------------------------------
 
 L41CE:  lda     D3500,y                         ;
-        sta     ZP_E4                           ;
+        sta     ZP_RT_TEMP4                     ;
         and     #$F8                            ;
         bne     L41C2                           ;
 
-        ldx     ZP_E8                           ;
+        ldx     ZP_RT_TEMP8                     ;
         clc                                     ;
-        lda     D2B00,x                         ;
+        lda     RTAB1,x                         ;
         ora     D3200,y                         ;
         tax                                     ;
-        lda     D2D00,x                         ;
+        lda     RTAB3,x                         ;
         sta     ZP_F5                           ;
-        ldx     ZP_E7                           ;
-        lda     D2B00,x                         ;
+        ldx     ZP_RT_TEMP7                     ;
+        lda     RTAB1,x                         ;
         ora     D3300,y                         ;
         tax                                     ;
-        lda     D2D00,x                         ;
+        lda     RTAB3,x                         ;
         adc     ZP_F5                           ;
         sta     ZP_F5                           ;
-        ldx     ZP_E6                           ;
-        lda     D2C00,x                         ;
+        ldx     ZP_RT_TEMP6                     ;
+        lda     RTAB2,x                         ;
         ora     D3400,y                         ;
         tax                                     ;
-        lda     D2D00,x                         ;
+        lda     RTAB3,x                         ;
         adc     ZP_F5                           ;
         adc     #$88                            ;
         lsr     a                               ;
@@ -1996,10 +2007,10 @@ SMC_4210 := * + 1                               ; Self-modifying code: argument 
         ldx     #$10                            ;
 @100:   dex                                     ;
         bne     @100                            ;
-        dec     ZP_EA                           ;
+        dec     ZP_RT_TEMP10                    ;
         bne     L4222                           ;
         iny                                     ;
-        dec     ZP_ED                           ;
+        dec     ZP_RT_TEMP11                    ;
 L421B:  bne     L421E                           ;
         rts                                     ;
 
@@ -2010,11 +2021,11 @@ L421E:
 SMC_SPEED := * + 1                              ; Self-modifying code: argument of lda #imm below.
 
         lda     #$46                            ;
-        sta     ZP_EA                           ;
-L4222:  dec     ZP_E9                           ;
+        sta     ZP_RT_TEMP10                    ;
+L4222:  dec     ZP_RT_TEMP9                     ;
         bne     @101                            ;
 @100:   lda     D2E00,y                         ;
-        sta     ZP_E9                           ;
+        sta     ZP_RT_TEMP9                     ;
         tax                                     ;
         lsr     a                               ;
         lsr     a                               ;
@@ -2022,18 +2033,18 @@ L4222:  dec     ZP_E9                           ;
         sec                                     ;
         txa                                     ;
         sbc     ZP_F5                           ;
-        sta     ZP_E3                           ;
+        sta     ZP_RT_TEMP3                     ;
         lda     #0                              ;
-        sta     ZP_E8                           ;
-        sta     ZP_E7                           ;
-        sta     ZP_E6                           ;
+        sta     ZP_RT_TEMP8                     ;
+        sta     ZP_RT_TEMP7                     ;
+        sta     ZP_RT_TEMP6                     ;
         jmp     L41CE                           ;
 
 ; ----------------------------------------------------------------------------
 
-@101:   dec     ZP_E3                           ;
+@101:   dec     ZP_RT_TEMP3                     ;
         bne     L424F                           ;
-        lda     ZP_E4                           ;
+        lda     ZP_RT_TEMP4                     ;
         beq     L424F                           ;
         jsr     PLAY_SAMPLES_REALTIME_SUB_2     ;
         jmp     @100                            ;
@@ -2041,17 +2052,17 @@ L4222:  dec     ZP_E9                           ;
 ; ----------------------------------------------------------------------------
 
 L424F:  clc                                     ;
-        lda     ZP_E8                           ;
-        adc     D2F00,y                         ;
-        sta     ZP_E8                           ;
+        lda     ZP_RT_TEMP8                     ;
+        adc     XTAB1,y                         ;
+        sta     ZP_RT_TEMP8                     ;
         clc                                     ;
-        lda     ZP_E7                           ;
-        adc     D3000,y                         ;
-        sta     ZP_E7                           ;
+        lda     ZP_RT_TEMP7                     ;
+        adc     XTAB2,y                         ;
+        sta     ZP_RT_TEMP7                     ;
         clc                                     ;
-        lda     ZP_E6                           ;
-        adc     D3100,y                         ;
-        sta     ZP_E6                           ;
+        lda     ZP_RT_TEMP6                     ;
+        adc     XTAB3,y                         ;
+        sta     ZP_RT_TEMP6                     ;
         jmp     L41CE                           ;
 
 ; ----------------------------------------------------------------------------
@@ -2061,25 +2072,25 @@ SMC_42DF := PLAY_SAMPLES_REALTIME_SUB_2 + 117
 
 PLAY_SAMPLES_REALTIME_SUB_2:
 
-        sty     ZP_EE                           ;
-        lda     ZP_E4                           ;
+        sty     ZP_RT_TEMP12                    ;
+        lda     ZP_RT_TEMP4                     ;
         tay                                     ;
         and     #$07                            ;
         tax                                     ;
         dex                                     ;
         stx     ZP_F5                           ;
         lda     D4331,x                         ;
-        sta     ZP_F2                           ;
+        sta     ZP_RT_TEMP16                    ;
         clc                                     ;
         lda     #>D39C0                         ;
         adc     ZP_F5                           ;
-        sta     ZP_EB_PTR_HI                    ;
+        sta     ZP_RT_PTR_HI                    ;
         lda     #<D39C0                         ;
-        sta     ZP_EB_PTR_LO                    ;
+        sta     ZP_RT_PTR_LO                    ;
         tya                                     ;
         and     #$F8                            ;
         bne     @1                              ;
-        ldy     ZP_EE                           ;
+        ldy     ZP_RT_TEMP12                    ;
         lda     D2E00,y                         ;
         lsr     a                               ;
         lsr     a                               ;
@@ -2091,10 +2102,10 @@ PLAY_SAMPLES_REALTIME_SUB_2:
         tay                                     ;
 @2:     lda     #8                              ;
         sta     ZP_F5                           ;
-        lda     (ZP_EB_PTR),y                   ;
+        lda     (ZP_RT_PTR),y                   ;
 @3:     asl     a                               ;
         bcc     @4                              ;
-        ldx     ZP_F2                           ;
+        ldx     ZP_RT_TEMP16                    ;
         stx     AUDC1                           ;
         bne     @5                              ;
 @4:     ldx     #$15                            ;
@@ -2109,16 +2120,16 @@ PLAY_SAMPLES_REALTIME_SUB_2:
         iny                                     ;
         bne     @2                              ;
         lda     #1                              ;
-        sta     ZP_E9                           ;
-        ldy     ZP_EE                           ;
+        sta     ZP_RT_TEMP9                     ;
+        ldy     ZP_RT_TEMP12                    ;
         rts                                     ;
 
 @6:     eor     #$FF                            ;
-        sta     ZP_E8                           ;
+        sta     ZP_RT_TEMP8                     ;
         ldy     ZP_FF                           ;
 @7:     lda     #8                              ;
         sta     ZP_F5                           ;
-        lda     (ZP_EB_PTR),y                   ;
+        lda     (ZP_RT_PTR),y                   ;
 @8:     asl     a                               ;
         bcc     @9                              ;
         ldx     #$1A                            ;
@@ -2135,12 +2146,12 @@ PLAY_SAMPLES_REALTIME_SUB_2:
         dec     ZP_F5                           ;
         bne     @8                              ;
         iny                                     ;
-        inc     ZP_E8                           ;
+        inc     ZP_RT_TEMP8                     ;
         bne     @7                              ;
         lda     #1                              ;
-        sta     ZP_E9                           ;
+        sta     ZP_RT_TEMP9                     ;
         sty     ZP_FF                           ;
-        ldy     ZP_EE                           ;
+        ldy     ZP_RT_TEMP12                    ;
         rts                                     ;
 
 ; ----------------------------------------------------------------------------
@@ -2148,13 +2159,13 @@ PLAY_SAMPLES_REALTIME_SUB_2:
         ; Continuation / end of PLAY_SAMPLES_REALTIME.
 
 L42F5:  lda     #1                              ;
-        sta     ZP_ED                           ;
+        sta     ZP_RT_TEMP11                    ;
         bne     L42FF                           ;
 
 L42FB:  lda     #$FF                            ;
-        sta     ZP_ED                           ;
+        sta     ZP_RT_TEMP11                    ;
 
-L42FF:  stx     ZP_EE                           ;
+L42FF:  stx     ZP_RT_TEMP12                    ;
         txa                                     ;
         sec                                     ;
         sbc     #$1E                            ;
@@ -2168,16 +2179,16 @@ L42FF:  stx     ZP_EE                           ;
         jmp     @2                              ;
 
 @3:     clc                                     ;
-        adc     ZP_ED                           ;
-        sta     ZP_E8                           ;
+        adc     ZP_RT_TEMP11                    ;
+        sta     ZP_RT_TEMP8                     ;
         sta     D2E00,x                         ;
 @4:     inx                                     ;
-        cpx     ZP_EE                           ;
+        cpx     ZP_RT_TEMP12                    ;
         beq     @5                              ;
         lda     D2E00,x                         ;
         cmp     #$FF                            ;
         beq     @4                              ;
-        lda     ZP_E8                           ;
+        lda     ZP_RT_TEMP8                     ;
         jmp     @3                              ;
 
 @5:     jmp     L3FFF                           ;
@@ -2191,9 +2202,9 @@ D4331:  .byte   $18,$1A,$17,$17,$17             ; Used in PLAY_SAMPLES_REALTIME_
 PLAY_SAMPLES_1:
 
         ldx     #$FF                            ;
-        stx     ZP_F3                           ;
+        stx     ZP_RT_TEMP17                    ;
         inx                                     ;
-        stx     ZP_F4                           ;
+        stx     ZP_RT_TEMP18                    ;
         stx     ZP_FF                           ;
 @1:     ldx     ZP_FF                           ;
         ldy     T_PHONEME_A,x                   ;
@@ -2202,9 +2213,9 @@ PLAY_SAMPLES_1:
         rts                                     ;
 
 @2:     clc                                     ;
-        lda     ZP_F4                           ;
+        lda     ZP_RT_TEMP18                    ;
         adc     T_PHONEME_B,x                   ;
-        sta     ZP_F4                           ;
+        sta     ZP_RT_TEMP18                    ;
         cmp     #$E8                            ;
         bcc     @3                              ;
         jmp     @6                              ;
@@ -2215,7 +2226,7 @@ PLAY_SAMPLES_1:
         inx                                     ;
         stx     ZP_INSERT_PHONEME_INDEX         ;
         lda     #0                              ;
-        sta     ZP_F4                           ;
+        sta     ZP_RT_TEMP18                           ;
         sta     ZP_INSERT_PHONEME_C             ;
         lda     #$FE                            ;
         sta     ZP_INSERT_PHONEME_A             ;
@@ -2226,12 +2237,12 @@ PLAY_SAMPLES_1:
 
 @4:     cpy     #0                              ;
         bne     @5                              ;
-        stx     ZP_F3                           ;
+        stx     ZP_RT_TEMP17                    ;
 @5:     inc     ZP_FF                           ;
         jmp     @1                              ;
 
-@6:     ldx     ZP_F3                           ;
-        lda     #$1F                            ;
+@6:     ldx     ZP_RT_TEMP17                    ;
+        lda     #31                             ;
         sta     T_PHONEME_A,x                   ;
         lda     #4                              ;
         sta     T_PHONEME_B,x                   ;
@@ -2242,7 +2253,7 @@ PLAY_SAMPLES_1:
         lda     #$FE                            ;
         sta     ZP_INSERT_PHONEME_A             ;
         lda     #0                              ;
-        sta     ZP_F4                           ;
+        sta     ZP_RT_TEMP18                    ;
         sta     ZP_INSERT_PHONEME_C             ;
         jsr     INSERT_PHONEME                  ;
         inx                                     ;
