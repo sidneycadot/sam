@@ -117,8 +117,8 @@ ZP_SAVE_Y := $FA                                ;
 ZP_SAVE_X := $FB                                ;
 ZP_SAVE_A := $FC                                ;
 
-ZP_FD := $FD                                    ;
-ZP_FE := $FE                                    ;
+ZP_FD := $FD                                    ; Used in PREP_1_PARSE_ASCII_PHONEMES, for second phoneme character.
+ZP_FE := $FE                                    ; Used in PREP_1_PARSE_ASCII_PHONEMES, for first phoneme character.
 ZP_FF := $FF                                    ;
 
 ; ----------------------------------------------------------------------------
@@ -224,7 +224,7 @@ SAM_SAY_PHONEMES:
         bne     @wrap_up                        ;
 
         jsr     PREP_2                          ; [~250 lines] Unknown phoneme rendering step.
-        jsr     PREP_3                          ; [ ~30 lines] Unknown phoneme rendering step.
+        jsr     PREP_3_FORWARD_STRESS           ; [ ~30 lines] Unknown phoneme rendering step.
         jsr     PREP_4                          ; [ ~20 lines] Unknown phoneme rendering step.
         jsr     PREP_5                          ; [~160 lines] Unknown phoneme rendering step.
         jsr     PREP_6                          ; [ ~80 lines] Unknown phoneme rendering step.
@@ -513,96 +513,105 @@ T_PHONEME_C:                                    ; Stress / emphasis modulation (
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
-STRESS:  .byte   "*123456789"          ; Note: stress markers are the characters 1..8.
+; ----------------------------------------------------------------------------
 
-        ;  *     0    timing
-        ; .*     1    inflection
-        ; ?*     2    inflection
-        ; ,*     3    timing
-        ; -*     4    timing
-        ; IY     5    vowel
-        ; IH     6    vowel
-        ; EH     7    vowel
-        ; AE     8    vowel
-        ; AA     9    vowel
-        ; AH    10    vowel
-        ; AO    11    vowel
-        ; UH    12    vowel
-        ; AX    13    vowel
-        ; IX    14    vowel
-        ; ER    15    vowel
-        ; UX    16    vowel
-        ; OH    17    vowel
-        ; RX    18    internal
-        ; LX    19    internal
-        ; WX    20    internal
-        ; YX    21    internal
-        ; WH    22    voiced consonant
-        ; R*    23    voiced consonant
-        ; L*    24    voiced consonant
-        ; W*    25    voiced consonant
-        ; Y*    26    voiced consonant
-        ; M*    27    voiced consonant
-        ; N*    28    voiced consonant
-        ; NX    29    voiced consonant
-        ; DX    30    internal
-        ; Q*    31    special phoneme
-        ; S*    32    unvoiced consonant
-        ; SH    33    unvoiced consonant
-        ; F*    34    unvoiced consonant
-        ; TH    35    unvoiced consonant
-        ; /H    36    unvoiced consonant
-        ; /X    37    internal
-        ; Z*    38    voiced consonant
-        ; ZH    39    voiced consonant
-        ; V*    40    voiced consonant
-        ; DH    41    voiced consonant
-        ; CH    42    unvoiced consonant
-        ; **    43    n/a
-        ; J*    44    voiced consonant
-        ; **    45
-        ; **    46
-        ; **    47
-        ; EY    48    dipthongs
-        ; AY    49    dipthongs
-        ; OY    50    dipthongs
-        ; AW    51    dipthongs
-        ; OW    52    dipthongs
-        ; UW    53    dipthongs
-        ; B*    54    voiced consonant
-        ; **    55
-        ; **    56
-        ; D*    57    voiced consonant
-        ; **    58
-        ; **    59
-        ; G*    60    voiced consonant
-        ; **    61
-        ; **    62
-        ; GX    63    *** undocumented ***
-        ; **    64
-        ; **    65
-        ; P*    66    unvoiced consonant
-        ; **    67
-        ; **    68
-        ; T*    69    unvoiced consonant
-        ; **    70
-        ; **    71
-        ; K*    72    unvoiced consonant
-        ; **    73
-        ; **    74
-        ; KX    75    *** undocumented ***
-        ; **    76
-        ; **    77
-        ; UL    78    special phoneme
-        ; UM    79    special phoneme
-        ; UN    80    special phoneme
+STRESS:  .byte   "*123456789"          ; Note: valid stress markers are the characters 1..8.
+
+; ----------------------------------------------------------------------------
+
+        ; PHONEMES_1ST and PHONEMES_2ND, defined below, are both 81 bytes long.
+        ;
+        ; PHONEME     INDEX      TYPE
+        ;
+        ;
+        ;  *             0    timing
+        ; .*             1    inflection
+        ; ?*             2    inflection
+        ; ,*             3    timing
+        ; -*             4    timing
+        ; IY             5    vowel
+        ; IH             6    vowel
+        ; EH             7    vowel
+        ; AE             8    vowel
+        ; AA             9    vowel
+        ; AH            10    vowel
+        ; AO            11    vowel
+        ; UH            12    vowel
+        ; AX            13    vowel
+        ; IX            14    vowel
+        ; ER            15    vowel
+        ; UX            16    vowel
+        ; OH            17    vowel
+        ; RX            18    internal
+        ; LX            19    internal
+        ; WX            20    internal
+        ; YX            21    internal
+        ; WH            22    voiced consonant
+        ; R*            23    voiced consonant
+        ; L*            24    voiced consonant
+        ; W*            25    voiced consonant
+        ; Y*            26    voiced consonant
+        ; M*            27    voiced consonant
+        ; N*            28    voiced consonant
+        ; NX            29    voiced consonant
+        ; DX            30    internal
+        ; Q*            31    special phoneme
+        ; S*            32    unvoiced consonant
+        ; SH            33    unvoiced consonant
+        ; F*            34    unvoiced consonant
+        ; TH            35    unvoiced consonant
+        ; /H            36    unvoiced consonant
+        ; /X            37    internal
+        ; Z*            38    voiced consonant
+        ; ZH            39    voiced consonant
+        ; V*            40    voiced consonant
+        ; DH            41    voiced consonant
+        ; CH            42    unvoiced consonant
+        ; **            43    n/a
+        ; J*            44    voiced consonant
+        ; **            45
+        ; **            46
+        ; **            47
+        ; EY            48    dipthongs
+        ; AY            49    dipthongs
+        ; OY            50    dipthongs
+        ; AW            51    dipthongs
+        ; OW            52    dipthongs
+        ; UW            53    dipthongs
+        ; B*            54    voiced consonant
+        ; **            55
+        ; **            56
+        ; D*            57    voiced consonant
+        ; **            58
+        ; **            59
+        ; G*            60    voiced consonant
+        ; **            61
+        ; **            62
+        ; GX            63    *** undocumented ***
+        ; **            64
+        ; **            65
+        ; P*            66    unvoiced consonant
+        ; **            67
+        ; **            68
+        ; T*            69    unvoiced consonant
+        ; **            70
+        ; **            71
+        ; K*            72    unvoiced consonant
+        ; **            73
+        ; **            74
+        ; KX            75    *** undocumented ***
+        ; **            76
+        ; **            77
+        ; UL            78    special phoneme
+        ; UM            79    special phoneme
+        ; UN            80    special phoneme
 
 PHONEMES_1ST:  .byte   " .?,-IIEAAAAUAIEUORLWYWRLWYMNNDQSSFT//ZZVDC*J***EAOAOUB**D**G**G**P**T**K**K**UUU"
 PHONEMES_2ND:  .byte   "*****YHHEAHOHXXRXHXXXXH******XX**H*HHX*H*HH*****YYYWWW*********X***********X**LMN"
 
 ; ----------------------------------------------------------------------------
 
-PhonemeFlags1:                          ; The table is indexed by a binary phoneme index (0..77).
+PhonemeFlags1:          ; This table is indexed by a binary phoneme index (0..77).
 
         .byte   $00,$00,$00,$00,$00,$A4,$A4,$A4,$A4,$A4,$A4,$84,$84,$A4,$A4,$84
         .byte   $84,$84,$84,$84,$84,$84,$44,$44,$44,$44,$44,$4C,$4C,$4C,$48,$4C
@@ -610,7 +619,7 @@ PhonemeFlags1:                          ; The table is indexed by a binary phone
         .byte   $B4,$B4,$B4,$94,$94,$94,$4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E,$4E
         .byte   $4E,$4E,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B,$4B
 
-PhonemeFlags2:                          ; This table is indexed by a binary phoneme index (0..77).
+PhonemeFlags2:          ; This table is indexed by a binary phoneme index (0..77).
 
         .byte   $80,$C1,$C1,$C1,$C1,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$10,$10,$10,$10,$08,$0C,$08,$04,$40
@@ -642,6 +651,7 @@ INSERT_PHONEME:
 
         ; Replace the three table entries at offset ZP_INSERT_PHONEME_INDEX by ZP_INSERT_PHONEME_{A,B,C} respectively.
         ; Shift all tables entries starting at ZP_INSERT_PHONEME_INDEX one index higher.
+        ; Table entries with index 255 are lost.
 
         jsr     SUB_SAVE_AXY                    ;
         ldx     #$FF                            ;
@@ -668,8 +678,8 @@ INSERT_PHONEME:
 
 ; ----------------------------------------------------------------------------
 
-PREP_1_PARSE_ASCII_PHONEMES:                    ; First subroutine called by SAM_SAY_PHONEMES.
-                                                ; This translates the SAM phonemes in ASCII to a binary representation.
+PREP_1_PARSE_ASCII_PHONEMES:                    ; This is the first subroutine called by SAM_SAY_PHONEMES.
+                                                ; It translates the SAM phonemes in ASCII to a binary representation.
 
         ldx     #0                              ; Initialize A, X, Y registers to zero.
         txa                                     ;
@@ -684,36 +694,38 @@ PREP_1_PARSE_ASCII_PHONEMES:                    ; First subroutine called by SAM
 
 @next_source_phoneme:
 
-        lda     SAM_BUFFER,x                    ; Is this end-of-line marker in the SAM_BUFFER?
+        lda     SAM_BUFFER,x                    ; Is this the end-of-line marker in the SAM_BUFFER?
         cmp     #$9B                            ;
-        beq     @end_loop                       ;
+        beq     @end_loop                       ; If yes, go to end-loop.
 
         sta     ZP_FE                           ; Copy 2-byte phoneme to ZP_FE (first byte) and ZP_FD (second byte).
         inx                                     ;
         lda     SAM_BUFFER,x                    ;
         sta     ZP_FD                           ;
 
+@find_two_char_phoneme:
+
         ldy     #0                              ; Search phoneme tables.
 
-@twochar_phoneme_candidate_loop:
+@find_two_char_phoneme_loop:
 
         lda     PHONEMES_1ST,y                  ;
         cmp     ZP_FE                           ;
-        bne     @no_match                       ;
+        bne     @no_two_char_match              ;
         lda     PHONEMES_2ND,y                  ;
         cmp     #'*'                            ; If the second character is a '*', skip this phoneme candidate.
-        beq     @no_match                       ;
+        beq     @no_two_char_match              ;
         cmp     ZP_FD                           ;
-        beq     @found_twochar_phoneme          ; Two-byte phoneme match.
+        beq     @found_two_char_phoneme         ; Two-byte phoneme match.
 
-@no_match:
+@no_two_char_match:
 
         iny                                     ;
         cpy     #81                             ; End of ASCII phoneme table?
-        bne     @twochar_phoneme_candidate_loop ; Try next phoneme.
-        beq     @find_one_char_phoneme          ; No two-char phoneme match find, Try one-char phoneme.
+        bne     @find_two_char_phoneme_loop     ; Try next phoneme.
+        beq     @find_one_char_phoneme          ; No two-char phoneme match found, try to match it as a one-char phoneme.
 
-@found_twochar_phoneme:                         ; Found a full two-character match!
+@found_two_char_phoneme:                        ; Found a full two-character match!
 
         tya                                     ; Save phoneme index into T_PHONEME_A phoneme table.
         ldy     ZP_FF                           ;
@@ -726,21 +738,21 @@ PREP_1_PARSE_ASCII_PHONEMES:                    ; First subroutine called by SAM
 
         ldy     #0                              ; Second pass for 1-character phonemes.
 
-@onechar_phoneme_candidate_loop:
+@find_one_char_phoneme_loop:
 
         lda     PHONEMES_2ND,y                  ;
         cmp     #'*'                            ;
         bne     @is_twochar                     ;
         lda     PHONEMES_1ST,y                  ;
         cmp     ZP_FE                           ;
-        beq     @found_onechar_phoneme          ;
+        beq     @found_one_char_phoneme         ;
 @is_twochar:
         iny                                     ;
         cpy     #81                             ;
-        bne     @onechar_phoneme_candidate_loop ;
+        bne     @find_one_char_phoneme_loop     ;
         beq     @find_stress_modifier           ;
 
-@found_onechar_phoneme:                         ; Found a full two-character match!
+@found_one_char_phoneme:                        ; Found a full two-character match!
 
         tya                                     ; Save phoneme index into T_PHONEME_A phoneme index table.
         ldy     ZP_FF                           ;
@@ -761,12 +773,12 @@ PREP_1_PARSE_ASCII_PHONEMES:                    ; First subroutine called by SAM
         bne     @stress_candidate_loop          ;
 
         stx     ERROR                           ; The buffer contains something that is not a two-character phoneme, not a one-character phoneme,
-        jsr     SAM_ERROR_SOUND                 ; and not a stress indicator. That, then, is an error.
+        jsr     SAM_ERROR_SOUND                 ; and not a stress indicator. Report an error, with ERROR pointing out the index.
         rts                                     ;
 
 @found_stress_modifier:
 
-        tya                                     ;
+        tya                                     ;  Set stress marker on the *previous* phoneme.
         ldy     ZP_FF                           ;
         dey                                     ;
         sta     T_PHONEME_C,y                   ;
@@ -774,7 +786,7 @@ PREP_1_PARSE_ASCII_PHONEMES:                    ; First subroutine called by SAM
 
 @end_loop:
 
-        lda     #$FF                            ; Setlast character of binary phoneme buffer to $FF.
+        lda     #$FF                            ; Set last character of binary phoneme buffer to $FF.
         ldy     ZP_FF                           ;
         sta     T_PHONEME_A,y                   ;
 
@@ -784,21 +796,29 @@ PREP_1_PARSE_ASCII_PHONEMES:                    ; First subroutine called by SAM
 
 PREP_4:                                         ; Called by SAM_SAY_PHONEMES.
 
-        ldy     #0                              ;
+        ldy     #0                              ; Visit all phonemes up to ending $FF.
 @loop:  lda     T_PHONEME_A,y                   ;
         cmp     #$FF                            ;
         beq     @exit                           ;
-        tax                                     ;
-        lda     T_PHONEME_C,y                   ;
-        beq     @2                              ;
-        bmi     @2                              ;
-        lda     D37E0,x                         ;
-        sta     T_PHONEME_B,y                   ;
-        jmp     @3                              ;
+        tax                                     ; PHONEME_A to X.
+        lda     T_PHONEME_C,y                   ; Does this phoneme have stress?
+        beq     @nostress                       ;
+        bmi     @nostress                       ;
 
-@2:     lda     D3830,x                         ;
+@stress:
+
+        lda     FTAB7,x                         ; Initialize T_PHONEME_B with stress value.
         sta     T_PHONEME_B,y                   ;
-@3:     iny                                     ;
+        jmp     @proceed                        ;
+
+@nostress:
+
+        lda     FTAB8,x                         ; Initialize T_PHONEME_B with no-stress value.
+        sta     T_PHONEME_B,y                   ;
+
+@proceed:
+
+        iny                                     ;
         jmp     @loop                           ;
 
 @exit:  rts                                     ;
@@ -831,14 +851,14 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
         ldy     ZP_INSERT_PHONEME_A             ;
         lda     T_PHONEME_C,x                   ;
         sta     ZP_INSERT_PHONEME_C             ;
-        lda     D3830,y                         ;
+        lda     FTAB8,y                         ;
         sta     ZP_INSERT_PHONEME_B             ;
         inx                                     ;
         stx     ZP_INSERT_PHONEME_INDEX         ;
         jsr     INSERT_PHONEME                  ;
         inc     ZP_INSERT_PHONEME_A             ;
         ldy     ZP_INSERT_PHONEME_A             ;
-        lda     D3830,y                         ;
+        lda     FTAB8,y                         ;
         sta     ZP_INSERT_PHONEME_B             ;
         inx                                     ;
         stx     ZP_INSERT_PHONEME_INDEX         ;
@@ -873,13 +893,13 @@ PREP_6:                                         ; Called by SAM_SAY_PHONEMES.
         ldx     ZP_INSERT_PHONEME_A             ;
         inx                                     ;
         stx     ZP_INSERT_PHONEME_A             ;
-        lda     D3830,x                         ;
+        lda     FTAB8,x                         ;
         sta     ZP_INSERT_PHONEME_B             ;
         jsr     INSERT_PHONEME                  ;
         inc     ZP_INSERT_PHONEME_INDEX         ;
         inx                                     ;
         stx     ZP_INSERT_PHONEME_A             ;
-        lda     D3830,x                         ;
+        lda     FTAB8,x                         ;
         sta     ZP_INSERT_PHONEME_B             ;
         jsr     INSERT_PHONEME                  ;
         inc     ZP_FF                           ;
@@ -899,7 +919,7 @@ PREP_2:                                         ; Called by SAM_SAY_PHONEMES.
 @find_next_nonzero_phoneme:                     ; Find the next non-zero binary phoneme.
 
         ldx     ZP_FF                           ;
-        lda     T_PHONEME_A,x                         ;
+        lda     T_PHONEME_A,x                   ;
         bne     @nonzero_phoneme_found          ;
         inc     ZP_FF                           ;
         jmp     @find_next_nonzero_phoneme      ;
@@ -914,9 +934,11 @@ cmp     #$FF                                    ; Is the phoneme $FF (the "end-o
 @process_phoneme:
 
         tay                                     ;
-        lda     PhonemeFlags1,y         ; Read from Phoneme Table #1
+        lda     PhonemeFlags1,y                 ; Read from Phoneme Table #1
         and     #$10                            ;
         beq     @6                              ;
+
+        ; --------------------------------------- PhonemeFlags1 bit 4 bit is set?
 
         lda     T_PHONEME_C,x                   ; Read corresponding stress value.
         sta     ZP_INSERT_PHONEME_C             ; Save stress table value.
@@ -940,6 +962,7 @@ cmp     #$FF                                    ; Is the phoneme $FF (the "end-o
 @6:     lda     T_PHONEME_A,x                   ;
         cmp     #$4E                            ;
         bne     @8                              ;
+
         lda     #$18                            ;
 @7:     sta     ZP_INSERT_PHONEME_A             ;
         lda     T_PHONEME_C,x                   ;
@@ -959,6 +982,7 @@ cmp     #$FF                                    ; Is the phoneme $FF (the "end-o
         bne     @10                             ;
         lda     #$1C                            ;
         bne     @7                              ;
+
 @10:    tay                                     ;
         lda     PhonemeFlags1,y                 ;
         and     #$80                            ;
@@ -1164,33 +1188,38 @@ cmp     #$FF                                    ; Is the phoneme $FF (the "end-o
 
 ; ----------------------------------------------------------------------------
 
-PREP_3:                                         ; Called by SAM_SAY_PHONEMES.
+PREP_3_FORWARD_STRESS:                          ; Called by SAM_SAY_PHONEMES.
 
-        lda     #0                              ;
+        lda     #0                              ; Loop over all entries in the T_PHONEME tables.
         sta     ZP_FF                           ;
-@1:     ldx     ZP_FF                           ;
-        ldy     T_PHONEME_A,x                   ;
-        cpy     #$FF                            ;
-        bne     @2                              ;
+@loop:  ldx     ZP_FF                           ;
+        ldy     T_PHONEME_A,x                   ; Load T_PHONEME_A[idx] into Y register.
+        cpy     #$FF                            ; If T_PHONEME_A[idx] == 0xff, we're done.
+        bne     @body                           ;
         rts                                     ;
 
-@2:     lda     PhonemeFlags1,y                 ;
-        and     #$40                            ;
-        beq     @3                              ;
-        inx                                     ;
-        ldy     T_PHONEME_A,x                   ;
+@body:
+
         lda     PhonemeFlags1,y                 ;
-        and     #$80                            ;
-        beq     @3                              ;
-        ldy     T_PHONEME_C,x                   ;
-        beq     @3                              ;
-        bmi     @3                              ;
-        iny                                     ;
+        and     #$40                            ;
+        beq     @proceed                        ; Flag $40 set on this phoneme: proceed.
+        inx                                     ;
+        ldy     T_PHONEME_A,x                   ; Examine next phoneme.
+        lda     PhonemeFlags1,y                 ;
+        and     #$80                            ; Flag $80 set on next phoneme: proceed.
+        beq     @proceed                        ;
+        ldy     T_PHONEME_C,x                   ; Next phoneme has stress?
+        beq     @proceed                        ;
+        bmi     @proceed                        ;
+        iny                                     ; Yes. Put (stress+1) on the preceding phoneme.
         dex                                     ;
         tya                                     ;
         sta     T_PHONEME_C,x                   ;
-@3:     inc     ZP_FF                           ;
-        jmp     @1                              ;
+
+@proceed:
+
+        inc     ZP_FF                           ; Proceed to next phoneme.
+        jmp     @loop                           ;
 
 ; ----------------------------------------------------------------------------
 
@@ -1365,7 +1394,7 @@ XTAB3:  .byte   $5D,$5D,$5C,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5B,$5E,$62,$66,$6A,$6E
 
         ; D3200 .. D34FF hold 768 samples of four bits each (?)
 
-D3200:  .byte   $00,$00,$04,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0B
+STAB1:  .byte   $00,$00,$04,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0B
         .byte   $0B,$0B,$0B,$0B,$0B,$0B,$0B,$0D,$0D,$0F,$0F,$0F,$0F,$0F,$0F,$0F
         .byte   $0F,$0F,$0F,$0F,$0D,$0D,$0D,$0D,$0B,$0B,$0B,$0B,$0B,$0B,$0B,$0B
         .byte   $06,$04,$02,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
@@ -1382,7 +1411,7 @@ D3200:  .byte   $00,$00,$04,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D,$0B
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
-D3300:  .byte   $00,$00,$03,$0B,$0B,$0B,$0B,$0B,$0B,$0B,$0B,$09,$08,$06,$05,$04
+STAB2:  .byte   $00,$00,$03,$0B,$0B,$0B,$0B,$0B,$0B,$0B,$0B,$09,$08,$06,$05,$04
         .byte   $04,$04,$04,$04,$04,$04,$05,$06,$08,$09,$09,$09,$09,$09,$09,$09
         .byte   $09,$09,$08,$08,$06,$06,$05,$05,$04,$04,$04,$04,$04,$04,$04,$04
         .byte   $03,$02,$02,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
@@ -1399,7 +1428,7 @@ D3300:  .byte   $00,$00,$03,$0B,$0B,$0B,$0B,$0B,$0B,$0B,$0B,$09,$08,$06,$05,$04
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
-D3400:  .byte   $00,$00,$02,$04,$04,$04,$04,$04,$04,$04,$04,$04,$03,$02,$02,$01
+STAB3:  .byte   $00,$00,$02,$04,$04,$04,$04,$04,$04,$04,$04,$04,$03,$02,$02,$01
         .byte   $01,$01,$01,$01,$01,$01,$01,$01,$01,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
@@ -1418,7 +1447,7 @@ D3400:  .byte   $00,$00,$02,$04,$04,$04,$04,$04,$04,$04,$04,$04,$03,$02,$02,$01
 
 ; ----------------------------------------------------------------------------
 
-D3500:  .byte   $7C,$7C,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+UTAB:   .byte   $7C,$7C,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
@@ -1437,73 +1466,100 @@ D3500:  .byte   $7C,$7C,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
 ; ----------------------------------------------------------------------------
 
-D3600:  .byte   $00,$13,$13,$13,$13,$0A,$0E,$13,$18,$1B,$17,$15,$10,$14,$0E,$12
+        ; Per-phoneme tables (?)
+
+FTAB1:  ; Initial XTAB1 value.
+
+        .byte   $00,$13,$13,$13,$13,$0A,$0E,$13,$18,$1B,$17,$15,$10,$14,$0E,$12
         .byte   $0E,$12,$12,$10,$0D,$0F,$0B,$12,$0E,$0B,$09,$06,$06,$06,$06,$11
         .byte   $06,$06,$06,$06,$0E,$10,$09,$0A,$08,$0A,$06,$06,$06,$05,$06,$00
         .byte   $13,$1B,$15,$1B,$12,$0D,$06,$06,$06,$06,$06,$06,$06,$06,$06,$06
         .byte   $06,$06,$06,$06,$06,$06,$06,$06,$06,$0A,$0A,$06,$06,$06,$2C,$13
 
-D3650:  .byte   $00,$43,$43,$43,$43,$54,$49,$43,$3F,$28,$2C,$1F,$25,$2D,$49,$31
+FTAB2:  ; Initial XTAB1 value.
+
+        .byte   $00,$43,$43,$43,$43,$54,$49,$43,$3F,$28,$2C,$1F,$25,$2D,$49,$31
         .byte   $24,$1E,$33,$25,$1D,$45,$18,$32,$1E,$18,$53,$2E,$36,$56,$36,$43
         .byte   $49,$4F,$1A,$42,$49,$25,$33,$42,$28,$2F,$4F,$4F,$42,$4F,$6E,$00
         .byte   $48,$27,$1F,$2B,$1E,$22,$1A,$1A,$1A,$42,$42,$42,$6E,$6E,$6E,$54
         .byte   $54,$54,$1A,$1A,$1A,$42,$42,$42,$6D,$56,$6D,$54,$54,$54,$7F,$7F
 
-D36A0:  .byte   $00,$5B,$5B,$5B,$5B,$6E,$5D,$5B,$58,$59,$57,$58,$52,$59,$5D,$3E
+FTAB3:  ; Initial XTAB3 value.
+
+        .byte   $00,$5B,$5B,$5B,$5B,$6E,$5D,$5B,$58,$59,$57,$58,$52,$59,$5D,$3E
         .byte   $52,$58,$3E,$6E,$50,$5D,$5A,$3C,$6E,$5A,$6E,$51,$79,$65,$79,$5B
         .byte   $63,$6A,$51,$79,$5D,$52,$5D,$67,$4C,$5D,$65,$65,$79,$65,$79,$00
         .byte   $5A,$58,$58,$58,$58,$52,$51,$51,$51,$79,$79,$79,$70,$6E,$6E,$5E
         .byte   $5E,$5E,$51,$51,$51,$79,$79,$79,$65,$65,$70,$5E,$5E,$5E,$08,$01
 
-D36F0:  .byte   $00,$00,$00,$00,$00,$0D,$0D,$0E,$0F,$0F,$0F,$0F,$0F,$0C,$0D,$0C
+FTAB4:  ; Initial STAB1 value.
+
+        .byte   $00,$00,$00,$00,$00,$0D,$0D,$0E,$0F,$0F,$0F,$0F,$0F,$0C,$0D,$0C
         .byte   $0F,$0F,$0D,$0D,$0D,$0E,$0D,$0C,$0D,$0D,$0D,$0C,$09,$09,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$0B,$0B,$0B,$0B,$00,$00,$01,$0B,$00,$02
         .byte   $0E,$0F,$0F,$0F,$0F,$0D,$02,$04,$00,$02,$04,$00,$01,$04,$00,$01
         .byte   $04,$00,$00,$00,$00,$00,$00,$00,$00,$0C,$00,$00,$00,$00,$0F,$0F
 
-D3740:  .byte   $00,$00,$00,$00,$00,$0A,$0B,$0D,$0E,$0D,$0C,$0C,$0B,$09,$0B,$0B
+FTAB5:  ; Initial STAB2 value.
+
+        .byte   $00,$00,$00,$00,$00,$0A,$0B,$0D,$0E,$0D,$0C,$0C,$0B,$09,$0B,$0B
         .byte   $0C,$0C,$0C,$08,$08,$0C,$08,$0A,$08,$08,$0A,$03,$09,$06,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$03,$05,$03,$04,$00,$00,$00,$05,$0A,$02
         .byte   $0E,$0D,$0C,$0D,$0C,$08,$00,$01,$00,$00,$01,$00,$00,$01,$00,$00
         .byte   $01,$00,$00,$00,$00,$00,$00,$00,$00,$0A,$00,$00,$0A,$00,$00,$00
 
-D3790:  .byte   $00,$00,$00,$00,$00,$08,$07,$08,$08,$01,$01,$00,$01,$00,$07,$05
+FTAB6:  ; Initial STAB3 value.
+
+        .byte   $00,$00,$00,$00,$00,$08,$07,$08,$08,$01,$01,$00,$01,$00,$07,$05
         .byte   $01,$00,$06,$01,$00,$07,$00,$05,$01,$00,$08,$00,$00,$03,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$01,$00,$00,$00,$00,$00,$01,$0E,$01
         .byte   $09,$01,$00,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$07,$00,$00,$05,$00,$13,$10
 
-D37E0:  .byte   $00,$12,$12,$12,$08,$0B,$09,$0B,$0E,$0F,$0B,$10,$0C,$06,$06,$0E
+FTAB7:  ; Used by PREP_4 to initialize T_PHONEME_B value, in case of stress.
+
+        .byte   $00,$12,$12,$12,$08,$0B,$09,$0B,$0E,$0F,$0B,$10,$0C,$06,$06,$0E
         .byte   $0C,$0E,$0C,$0B,$08,$08,$0B,$0A,$09,$08,$08,$08,$08,$08,$03,$05
         .byte   $02,$02,$02,$02,$02,$02,$06,$06,$08,$06,$06,$02,$09,$04,$02,$01
         .byte   $0E,$0F,$0F,$0F,$0E,$0E,$08,$02,$02,$07,$02,$01,$07,$02,$02,$07
         .byte   $02,$02,$08,$02,$02,$06,$02,$02,$07,$02,$04,$07,$01,$04,$05,$05
 
-D3830:  .byte   $00,$12,$12,$12,$08,$08,$08,$08,$08,$0B,$06,$0C,$0A,$05,$05,$0B
+FTAB8:  ; Used by PREP_4 to initialize T_PHONEME_B value, in case of no stress.
+        ; Also used in PREP_6.
+
+        .byte   $00,$12,$12,$12,$08,$08,$08,$08,$08,$0B,$06,$0C,$0A,$05,$05,$0B
         .byte   $0A,$0A,$0A,$09,$08,$07,$09,$07,$06,$08,$06,$07,$07,$07,$02,$05
         .byte   $02,$02,$02,$02,$02,$02,$06,$06,$07,$06,$06,$02,$08,$03,$01,$1E
         .byte   $0D,$0C,$0C,$0C,$0E,$09,$06,$01,$02,$05,$01,$01,$06,$01,$02,$06
         .byte   $01,$02,$08,$02,$02,$04,$02,$02,$06,$01,$04,$06,$01,$04,$C7,$FF
 
-D3880:  .byte   $00,$02,$02,$02,$02,$04,$04,$04,$04,$04,$04,$04,$04,$04,$04,$04
+FTAB9:  ; Used in realtime processing.
+
+        .byte   $00,$02,$02,$02,$02,$04,$04,$04,$04,$04,$04,$04,$04,$04,$04,$04
         .byte   $04,$04,$03,$02,$04,$04,$02,$02,$02,$02,$02,$01,$01,$01,$01,$01
         .byte   $01,$01,$01,$01,$01,$01,$02,$02,$02,$01,$00,$01,$00,$01,$00,$05
         .byte   $05,$05,$05,$05,$04,$04,$02,$00,$01,$02,$00,$01,$02,$00,$01,$02
         .byte   $00,$01,$02,$00,$02,$02,$00,$01,$03,$00,$02,$03,$00,$02,$A0,$A0
 
-D38D0:  .byte   $00,$02,$02,$02,$02,$04,$04,$04,$04,$04,$04,$04,$04,$04,$04,$04
+FTAB10: ; Used in realtime processing.
+
+        .byte   $00,$02,$02,$02,$02,$04,$04,$04,$04,$04,$04,$04,$04,$04,$04,$04
         .byte   $04,$04,$03,$03,$04,$04,$03,$03,$03,$03,$03,$01,$02,$03,$02,$01
         .byte   $03,$03,$03,$03,$01,$01,$03,$03,$03,$02,$02,$03,$02,$03,$00,$00
         .byte   $05,$05,$05,$05,$04,$04,$02,$00,$02,$02,$00,$03,$02,$00,$04,$02
         .byte   $00,$03,$02,$00,$02,$02,$00,$02,$03,$00,$03,$03,$00,$03,$B0,$A0
 
-D3920:  .byte   $00,$1F,$1F,$1F,$1F,$02,$02,$02,$02,$02,$02,$02,$02,$02,$05,$05
+FTAB11: ; Used in realtime processing.
+
+        .byte   $00,$1F,$1F,$1F,$1F,$02,$02,$02,$02,$02,$02,$02,$02,$02,$05,$05
         .byte   $02,$0A,$02,$08,$05,$05,$0B,$0A,$09,$08,$08,$A0,$08,$08,$17,$1F
         .byte   $12,$12,$12,$12,$1E,$1E,$14,$14,$14,$14,$17,$17,$1A,$1A,$1D,$1D
         .byte   $02,$02,$02,$02,$02,$02,$1A,$1D,$1B,$1A,$1D,$1B,$1A,$1D,$1B,$1A
         .byte   $1D,$1B,$17,$1D,$17,$17,$1D,$17,$17,$1D,$17,$17,$1D,$17,$17,$17
 
-D3970:  .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+FTAB12: ; Initial UTAB value.
+
+        .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
         .byte   $F1,$E2,$D3,$BB,$7C,$95,$01,$02,$03,$03,$00,$72,$00,$02,$00,$00
         .byte   $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
@@ -1728,23 +1784,25 @@ L3FFF:  lda     D3EFC,y                         ;
         sta     ZP_RT_TEMP8                     ;
         ldy     ZP_F5                           ;
 
-@1:     lda     D3600,y                         ;
+@1:     lda     FTAB1,y                         ;
         sta     XTAB1,x                         ;
-        lda     D3650,y                         ;
+        lda     FTAB2,y                         ;
         sta     XTAB2,x                         ;
-        lda     D36A0,y                         ;
+        lda     FTAB3,y                         ;
         sta     XTAB3,x                         ;
-        lda     D36F0,y                         ;
-        sta     D3200,x                         ;
-        lda     D3740,y                         ;
-        sta     D3300,x                         ;
-        lda     D3790,y                         ;
-        sta     D3400,x                         ;
-        lda     D3970,y                         ;
-        sta     D3500,x                         ;
+
+        lda     FTAB4,y                         ;
+        sta     STAB1,x                         ;
+        lda     FTAB5,y                         ;
+        sta     STAB2,x                         ;
+        lda     FTAB6,y                         ;
+        sta     STAB3,x                         ;
+
+        lda     FTAB12,y                        ;
+        sta     UTAB,x                          ;
 
         clc                                     ;
-        lda     #$40                            ; [SMB_PITCH points to the argument of this lda #imm]
+        lda     #$40                            ; [SMC_PITCH points to the argument of this lda #imm]
         adc     ZP_RT_TEMP8                     ;
         sta     D2E00,x                         ;
         inx                                     ;
@@ -1765,27 +1823,27 @@ L404E:  lda     #0                              ;
         jmp     @600                            ;
 
 @100:   tax                                     ;
-        lda     D3920,x                         ;
+        lda     FTAB11,x                        ;
         sta     ZP_F5                           ;
-        lda     D3920,y                         ;
+        lda     FTAB11,y                        ;
         cmp     ZP_F5                           ;
         beq     @102                            ;
         bcc     @101                            ;
-        lda     D3880,y                         ;
+        lda     FTAB9,y                         ;
         sta     ZP_RT_TEMP8                     ;
-        lda     D38D0,y                         ;
+        lda     FTAB10,y                        ;
         sta     ZP_RT_TEMP7                     ;
         jmp     @103                            ;
 
-@101:   lda     D38D0,x                         ;
+@101:   lda     FTAB10,x                        ;
         sta     ZP_RT_TEMP8                     ;
-        lda     D3880,x                         ;
+        lda     FTAB9,x                         ;
         sta     ZP_RT_TEMP7                     ;
         jmp     @103                            ;
 
-@102:   lda     D3880,y                         ;
+@102:   lda     FTAB9,y                         ;
         sta     ZP_RT_TEMP8                     ;
-        lda     D3880,x                         ;
+        lda     FTAB9,x                         ;
         sta     ZP_RT_TEMP7                     ;
 @103:   clc                                     ;
         lda     ZP_RT_TEMP12                    ;
@@ -1890,7 +1948,7 @@ L404E:  lda     #0                              ;
         bcc     @399                            ;
 @402:   inc     ZP_RT_PTR_HI                    ;
         lda     ZP_RT_PTR_HI                    ;
-        cmp     #>D3500                         ;
+        cmp     #>UTAB                          ;
         beq     @500                            ;
         jmp     @150                            ;
 
@@ -1926,9 +1984,9 @@ L404E:  lda     #0                              ;
         lda     #3                              ; Map 3 pages of values through D374 gain curve (?)
         sta     ZP_F5                           ;
 
-        lda     #<D3200                         ;
+        lda     #<STAB1                         ;
         sta     ZP_RT_PTR_LO                    ;
-        lda     #>D3200                         ;
+        lda     #>STAB1                         ;
         sta     ZP_RT_PTR_HI                    ;
 
 @799:   ldy     #0                              ; Copy a page, applying the sample gain curve.
@@ -1969,7 +2027,10 @@ L41C2:  jsr     PLAY_SAMPLES_REALTIME_SUB_2     ;
 
 ; ----------------------------------------------------------------------------
 
-L41CE:  lda     D3500,y                         ;
+SMC_4210  := L41CE + 66
+SMC_SPEED := L421E + 1
+
+L41CE:  lda     UTAB,y                          ;
         sta     ZP_RT_TEMP4                     ;
         and     #$F8                            ;
         bne     L41C2                           ;
@@ -1977,21 +2038,24 @@ L41CE:  lda     D3500,y                         ;
         ldx     ZP_RT_TEMP8                     ;
         clc                                     ;
         lda     RTAB1,x                         ;
-        ora     D3200,y                         ;
+        ora     STAB1,y                         ;
         tax                                     ;
+
         lda     RTAB3,x                         ;
         sta     ZP_F5                           ;
         ldx     ZP_RT_TEMP7                     ;
         lda     RTAB1,x                         ;
-        ora     D3300,y                         ;
+        ora     STAB2,y                         ;
         tax                                     ;
+
         lda     RTAB3,x                         ;
         adc     ZP_F5                           ;
         sta     ZP_F5                           ;
         ldx     ZP_RT_TEMP6                     ;
         lda     RTAB2,x                         ;
-        ora     D3400,y                         ;
+        ora     STAB3,y                         ;
         tax                                     ;
+
         lda     RTAB3,x                         ;
         adc     ZP_F5                           ;
         adc     #$88                            ;
@@ -2002,9 +2066,7 @@ L41CE:  lda     D3500,y                         ;
         ora     #$10                            ;
         sta     AUDC1                           ;
 
-SMC_4210 := * + 1                               ; Self-modifying code: argument of ldx #imm below.
-
-        ldx     #$10                            ;
+        ldx     #$10                            ;  [SMC_4210 points to the argument of this ldx #imm]
 @100:   dex                                     ;
         bne     @100                            ;
         dec     ZP_RT_TEMP10                    ;
@@ -2016,11 +2078,7 @@ L421B:  bne     L421E                           ;
 
 ; ----------------------------------------------------------------------------
 
-L421E:
-
-SMC_SPEED := * + 1                              ; Self-modifying code: argument of lda #imm below.
-
-        lda     #$46                            ;
+L421E:  lda     #$46                            ; [SMC_SPEED points to the argument of this lda #imm]
         sta     ZP_RT_TEMP10                    ;
 L4222:  dec     ZP_RT_TEMP9                     ;
         bne     @101                            ;
@@ -2112,7 +2170,7 @@ PLAY_SAMPLES_REALTIME_SUB_2:
         stx     AUDC1                           ;
         nop                                     ;
 @5:
-        ldx     #13                             ; [SMB_42B0 points to the argument of this ldx #imm]
+        ldx     #13                             ; [SMC_42B0 points to the argument of this ldx #imm]
 @wait:  dex                                     ;
         bne     @wait                           ;
         dec     ZP_F5                           ;
