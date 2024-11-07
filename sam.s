@@ -1718,7 +1718,7 @@ PLAY_SAMPLES_REALTIME_SUB_1:
 SAM_SAVE_ZP_ADDRESSES:
 
         ; Save zero page addresses $E1..$FF.
-        ; Note that address $E0 is not saved. (Bug?)
+        ; Note that address $E0 is not saved, but it is not used so that's ok.
 
         ldx     #$1F                            ;
 @loop:  lda     ZP_SAVE_RANGE,x                 ;
@@ -1732,7 +1732,7 @@ SAM_SAVE_ZP_ADDRESSES:
 SAM_RESTORE_ZP_ADDRESSES:
 
         ; Restore zero page addresses $E1..$FF.
-        ; Note that address $E0 is not restored. (Bug?)
+        ; Note that address $E0 is not restored, but it is not used so that's ok.
 
         ldx     #$1F                            ;
 @loop:  lda     ZEROPAGE_SAVE_RANGE_BUFFER,x    ;
@@ -2284,7 +2284,7 @@ PLAY_SAMPLES_1:
         inx                                     ;
         stx     ZP_INSERT_PHONEME_INDEX         ;
         lda     #0                              ;
-        sta     ZP_RT_TEMP18                           ;
+        sta     ZP_RT_TEMP18                    ;
         sta     ZP_INSERT_PHONEME_C             ;
         lda     #$FE                            ;
         sta     ZP_INSERT_PHONEME_A             ;
@@ -2582,7 +2582,7 @@ D4586:  .byte $00,$00,$42,$01,$78,$03,$00,$00,$00,$00
 
 ; ----------------------------------------------------------------------------
 
-D4590:  ; This is where the reciter executable image starts.
+D4590:  ; This is where the SAM Reciter executable image starts.
         ; The data below (193 bytes) is probably garbage.
 
         .byte   $41,$81,$92,$00,$00,$00,$30,$2E,$30,$16,$00
