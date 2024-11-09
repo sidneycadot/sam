@@ -7,7 +7,7 @@ typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint64_t u64;
 
-#define MEM_SIZE 0x5000
+#define MEM_SIZE 0x4651
 
 struct sam_machine {
     u64 clocks;
@@ -50,8 +50,26 @@ u8 sam_read_byte(struct sam_machine * sam, u16 address)
     return sam->mem[address];
 }
 
+void emit_audio_sample(u64 time, u8 sample)
+{
+    (void)time;
+    (void)sample;
+}
+
 void sam_write_byte(struct sam_machine * sam, u16 address, u8 value)
 {
+    switch (address)
+    {
+        case 0xd201:
+        {
+            assert( (16 <= value) && (value <= 31) );
+            emit_audio_sample(sam->clocks, value);
+        }
+        case 0xd20e: // Ignore writes to hardware addresses.
+        case 0xd400:
+        case 0xd40e: return;
+    }
+    printf("0x%04x\n", address);
     assert(address < MEM_SIZE);
     sam->mem[address] = value;
 }
@@ -121,20 +139,99 @@ void sam_branch_if(struct sam_machine * sam, unsigned condition)
     }
 }
 
+void sam_add_with_carry(struct sam_machine * sam, u8 value)
+{
+    const u16 temp = (u16)(sam->a) + (u16)(value) + (u16)(sam->flag_c);
+    sam->flag_c = (temp & 0x100) != 0;
+    sam->a = temp & 0xff;
+    sam_update_nz_flags(sam, sam->a);
+}
+
+void sam_subtract_with_borrow(struct sam_machine * sam, u8 value)
+{
+    const u16 temp = (u16)(sam->a) - (u16)(value) - (u16)(!sam->flag_c);
+    sam->flag_c = (temp & 0x100) != 0;
+    sam->a = temp & 0xff;
+    sam_update_nz_flags(sam, sam->a);
+}
+
 int sam_execute_instruction(struct sam_machine * sam)
 {
     const u8 instruction = sam_read_byte(sam, sam->pc);
-    printf("[%16lu] 0x%04x instruction: 0x%02x\n", sam->clocks, sam->pc, instruction);
+    printf("[%16llu] 0x%04x instruction: 0x%02x\n", sam->clocks, sam->pc, instruction);
 
     switch (instruction)
     {
+        case 0x06: // asl zp
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1);
+            u8 value = sam_read_byte(sam, zp_address);
+            const u8 shift_out = (value & 0x80) != 0;
+            value = (value << 1) | sam->flag_c;
+            sam_update_nz_flags(sam, value);
+            sam->flag_c = shift_out;
+            sam_write_byte(sam, zp_address, value);
+            sam->pc += 2;
+            sam->clocks += 5;
+            break;
+        }
+        case 0x09: // ora #imm
+        {
+            const u8 value = sam_read_byte(sam, sam->pc + 1);
+            sam->a |= value;
+            sam_update_nz_flags(sam, sam->a);
+            sam->pc += 2;
+            sam->clocks += 2;
+            break;
+        }
+        case 0x0a: // asl a
+        {
+            sam->flag_c = (sam->a & 0x80) != 0;
+            sam->a <<= 1;
+            sam_update_nz_flags(sam, sam->a);
+            sam->pc += 1;
+            sam->clocks += 2;
+            break;
+        }
+        case 0x10: // bpl rel
+        {
+            sam_branch_if(sam, sam->flag_n == 0);
+            break;
+        }
+        case 0x18: // clc
+        {
+            sam->flag_c = 0;
+            sam->pc += 1;
+            sam->clocks += 2;
+            break;
+        }
+        case 0x19: // ora abs,y
+        {
+            const u16 base_address = sam_read_word(sam, sam->pc + 1);
+            const u16 abs_address = base_address + sam->y;
+            const u8 value = sam_read_byte(sam, abs_address);
+            sam->a |= value;
+            sam_update_nz_flags(sam, sam->a);
+            sam->pc += 3;
+            sam->clocks += different_pages(base_address, abs_address) ? 5 : 4;
+            break;
+        }
         case 0x20: // jsr absolute
         {
             const u16 target = sam_read_word(sam, sam->pc + 1);
-            // Push (PC + 1) onto the stack.
+            // Push (PC + 2) onto the stack.
             sam_push_word(sam, sam->pc + 2);
             sam->pc = target;
             sam->clocks += 6;
+            break;
+        }
+        case 0x24: // bit zpage
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1);
+            const u8 value = sam_read_byte(sam, zp_address);
+            sam_update_nz_flags(sam, value);
+            sam->pc += 2;
+            sam->clocks += 3;
             break;
         }
         case 0x29: // and #imm
@@ -146,10 +243,43 @@ int sam_execute_instruction(struct sam_machine * sam)
             sam->clocks += 2;
             break;
         }
+        case 0x2a: // rol a
+        {
+            u8 shift_out = (sam->a & 0x80) != 0;
+            sam->a = (sam->a << 1) | sam->flag_c;
+            sam->flag_c = shift_out;
+            sam_update_nz_flags(sam, sam->a);
+            sam->pc += 1;
+            sam->clocks += 2;
+            break;
+        }
+        case 0x30: // bmi rel
+        {
+            sam_branch_if(sam, sam->flag_n != 0);
+            break;
+        }
         case 0x38: // sec
         {
             sam->flag_c = 1;
+            sam->pc += 1;
+            sam->clocks += 2;
+            break;
+        }
+        case 0x49: // eor #imm
+        {
+            const u8 value = sam_read_byte(sam, sam->pc + 1);
+            sam->a ^= value;
+            sam_update_nz_flags(sam, sam->a);
             sam->pc += 2;
+            sam->clocks += 2;
+            break;
+        }
+        case 0x4a: // lsr a
+        {
+            sam->flag_c = sam->a & 0x01;
+            sam->a >>= 1;
+            sam_update_nz_flags(sam, sam->a);
+            sam->pc += 1;
             sam->clocks += 2;
             break;
         }
@@ -165,6 +295,49 @@ int sam_execute_instruction(struct sam_machine * sam)
             const u16 target = sam_pop_word(sam) + 1;
             sam->pc = target;
             sam->clocks += 6;
+            break;
+        }
+        case 0x65: // adc zp
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1);
+            const u8 value = sam_read_byte(sam, zp_address);
+            const u16 temp = (u16)(sam->a) + (u16)(value) + (u16)(sam->flag_c);
+            sam->flag_c = (temp & 0x100) != 0;
+            sam->a = temp & 0xff;
+            sam_update_nz_flags(sam, sam->a);
+            sam->pc += 2;
+            sam->clocks += 3;
+            break;
+        }
+        case 0x69: // adc #imm
+        {
+            const u8 value = sam_read_byte(sam, sam->pc + 1);
+            const u16 temp = (u16)(sam->a) + (u16)(value) + (u16)(sam->flag_c);
+            sam->flag_c = (temp & 0x100) != 0;
+            sam->a = temp & 0xff;
+            sam_update_nz_flags(sam, sam->a);
+            sam->pc += 2;
+            sam->clocks += 2;
+            break;
+        }
+        case 0x79: // adc abs,y
+        {
+            const u16 base_address = sam_read_word(sam, sam->pc + 1);
+            const u16 abs_address = base_address + sam->y;
+            const u8 value = sam_read_byte(sam, abs_address);
+            sam_add_with_carry(sam, value);
+            sam->pc += 3;
+            sam->clocks += different_pages(base_address, abs_address) ? 5 : 4;
+            break;
+        }
+        case 0x7d: // adc abs,x
+        {
+            const u16 base_address = sam_read_word(sam, sam->pc + 1);
+            const u16 abs_address = base_address + sam->x;
+            const u8 value = sam_read_byte(sam, abs_address);
+            sam_add_with_carry(sam, value);
+            sam->pc += 3;
+            sam->clocks += different_pages(base_address, abs_address) ? 5 : 4;
             break;
         }
         case 0x84: // sty zp
@@ -212,6 +385,37 @@ int sam_execute_instruction(struct sam_machine * sam)
             const u16 abs_address = sam_read_word(sam, sam->pc + 1);
             sam_write_byte(sam, abs_address, sam->a);
             sam->pc += 3;
+            sam->clocks += 4;
+            break;
+        }
+        case 0x8e: // stx abs
+        {
+            const u16 abs_address = sam_read_word(sam, sam->pc + 1);
+            sam_write_byte(sam, abs_address, sam->x);
+            sam->pc += 3;
+            sam->clocks += 4;
+            break;
+        }
+        case 0x90: // bcc rel
+        {
+            sam_branch_if(sam, sam->flag_c == 0);
+            break;
+        }
+        case 0x91: // sta (zp),y
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1);
+            const u16 base_address = sam_read_word(sam, zp_address);
+            const u16 abs_address = base_address + sam->y;
+            sam_write_byte(sam, abs_address, sam->a);
+            sam->pc += 2;
+            sam->clocks += 4;
+            break;
+        }
+        case 0x95: // sta zp,x
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1) + sam->x;
+            sam_write_byte(sam, zp_address, sam->a);
+            sam->pc += 2;
             sam->clocks += 4;
             break;
         }
@@ -304,6 +508,14 @@ int sam_execute_instruction(struct sam_machine * sam)
             sam->clocks += 2;
             break;
         }
+        case 0xaa: // tax
+        {
+            sam->x = sam->a;
+            sam_update_nz_flags(sam, sam->x);
+            sam->pc += 1;
+            sam->clocks += 2;
+            break;
+        }
         case 0xad: // lda abs
         {
             const u16 abs_address = sam_read_word(sam, sam->pc + 1);
@@ -312,6 +524,33 @@ int sam_execute_instruction(struct sam_machine * sam)
             sam->a = value;
             sam->pc += 3;
             sam->clocks += 4;
+            break;
+        }
+        case 0xae: // ldx abs
+        {
+            const u16 abs_address = sam_read_word(sam, sam->pc + 1);
+            const u8 value = sam_read_byte(sam, abs_address);
+            sam_update_nz_flags(sam, value);
+            sam->x = value;
+            sam->pc += 3;
+            sam->clocks += 4;
+            break;
+        }
+        case 0xb0: // bcs rel
+        {
+            sam_branch_if(sam, sam->flag_c != 0);
+            break;
+        }
+        case 0xb1: // lda (zp),y
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1);
+            const u16 base_address = sam_read_word(sam, zp_address);
+            const u16 abs_address = base_address + sam->y;
+            const u8 value = sam_read_byte(sam, abs_address);
+            sam_update_nz_flags(sam, value);
+            sam->a = value;
+            sam->pc += 2;
+            sam->clocks += different_pages(base_address, abs_address) ? 6 : 5;
             break;
         }
         case 0xb5: // lda zp,x
@@ -362,7 +601,7 @@ int sam_execute_instruction(struct sam_machine * sam)
             const u8 value = sam_read_byte(sam, sam->pc + 1);
 
             const u8 difference = sam->y - value;
-            sam->flag_c = (sam->y >= value); // TODO: check.
+            sam->flag_c = (sam->y >= value);
             sam_update_nz_flags(sam, difference);
             sam->pc += 2;
             sam->clocks += 2;
@@ -374,10 +613,20 @@ int sam_execute_instruction(struct sam_machine * sam)
             const u8 value = sam_read_byte(sam, zp_address);
 
             const u8 difference = sam->a - value;
-            sam->flag_c = (sam->a >= value); // TODO: check.
+            sam->flag_c = (sam->a >= value);
             sam_update_nz_flags(sam, difference);
             sam->pc += 2;
             sam->clocks += 3;
+            break;
+        }
+        case 0xc6: // dec zp
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1);
+            const u8 value = sam_read_byte(sam, zp_address) - 1;
+            sam_update_nz_flags(sam, value);
+            sam_write_byte(sam, zp_address, value);
+            sam->pc += 2;
+            sam->clocks += 5;
             break;
         }
         case 0xc8: // iny
@@ -393,7 +642,7 @@ int sam_execute_instruction(struct sam_machine * sam)
             const u8 value = sam_read_byte(sam, sam->pc + 1);
 
             const u8 difference = sam->a - value;
-            sam->flag_c = (sam->a >= value); // TODO: check.
+            sam->flag_c = (sam->a >= value);
             sam_update_nz_flags(sam, difference);
             sam->pc += 2;
             sam->clocks += 2;
@@ -431,8 +680,18 @@ int sam_execute_instruction(struct sam_machine * sam)
             const u8 value = sam_read_byte(sam, zp_address);
 
             const u8 difference = sam->x - value;
-            sam->flag_c = (sam->x >= value); // TODO: check.
+            sam->flag_c = (sam->x >= value);
             sam_update_nz_flags(sam, difference);
+            sam->pc += 2;
+            sam->clocks += 3;
+            break;
+        }
+        case 0xe5: // sbc zpage
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1);
+            const u8 value = sam_read_byte(sam, zp_address);
+
+            sam_subtract_with_borrow(sam, value);
             sam->pc += 2;
             sam->clocks += 3;
             break;
@@ -455,9 +714,40 @@ int sam_execute_instruction(struct sam_machine * sam)
             sam->clocks += 2;
             break;
         }
+        case 0xe9: // sbc #imm
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1);
+            const u8 value = sam_read_byte(sam, zp_address) + 1;
+            const u16 temp = (u16)(sam->a) - (u16)(value) - (u16)(!sam->flag_c);
+            sam->flag_c = (temp & 0x100) != 0;
+            sam->a = temp & 0xff;
+            sam_update_nz_flags(sam, sam->a);
+            sam->pc += 2;
+            sam->clocks += 4;
+            break;
+        }
+        case 0xea: // nop
+        {
+            sam->pc += 1;
+            sam->clocks += 2;
+            break;
+        }
         case 0xf0: // beq rel
         {
             sam_branch_if(sam, sam->flag_z != 0);
+            break;
+        }
+        case 0xf1: // sbc (zp),y
+        {
+            const u8 zp_address = sam_read_byte(sam, sam->pc + 1);
+            const u16 base_address = sam_read_word(sam, zp_address);
+            const u16 abs_address = base_address + sam->y;
+            const u8 value = sam_read_byte(sam, abs_address);
+            sam_subtract_with_borrow(sam, value);
+            sam_update_nz_flags(sam, value);
+            sam->a = value;
+            sam->pc += 2;
+            sam->clocks += different_pages(base_address, abs_address) ? 6 : 5;
             break;
         }
         default:
@@ -472,12 +762,13 @@ void sam_run(struct sam_machine * sam)
 {
     sam->clocks = 0;
     sam->sp = 0xff;
+    sam_push_word(sam, 0xffff); // The last RTS will return to address 0.
     sam->pc = 0x2004;
     sam->flag_z = 0;
     sam->flag_n = 0;
     sam->flag_c = 0;
 
-    for (;;)
+    while (sam->pc != 0)
     {
         int result = sam_execute_instruction(sam);
         if (result != 0)
@@ -485,6 +776,7 @@ void sam_run(struct sam_machine * sam)
             break;
         }
     }
+    printf("done!\n");
 }
 
 int main(void)
