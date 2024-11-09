@@ -6,7 +6,7 @@ and sold by Don't Ask Software starting in 1982.
 
 from typing import Optional
 
-from python_reciter_rewrite_rules import ReciterRewriteRule, ReciterCharacterClass
+from reciter_rewrite_rules import ReciterRewriteRule, ReciterCharacterClass
 
 
 class Reciter:

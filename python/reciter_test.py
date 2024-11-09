@@ -5,8 +5,8 @@
 import argparse
 import re
 
-from python_reciter import Reciter
-from python_reciter_rewrite_rules import read_reciter_rules_into_dictionary
+from reciter import Reciter
+from reciter_rewrite_rules import read_reciter_rules_into_dictionary
 
 
 def test_reciter_with_testcase_file(reciter: Reciter, filename: str):
@@ -66,17 +66,15 @@ def main():
 
     # Parse command line arguments.
 
-    default_testcase_filename = "tests/reciter_features.out"
-    default_rules_filename = "english_reciter_rules.txt"
+    default_rules_filename = "reciter_rules_english.txt"
 
     parser = argparse.ArgumentParser(description="Test the Python re-implementation of the SAM Reciter.")
 
-    parser.add_argument("-f", "--filename", default=default_testcase_filename,
-                        help=f"testcase filename (default: {default_testcase_filename})")
     parser.add_argument("--rules-filename", default=default_rules_filename,
                         help=f"rewrite rule definition filename (default: {default_rules_filename})")
     parser.add_argument("--fix-bugs", action='store_true',
                         help="fix known bugs in the rewrite rule matching")
+    parser.add_argument("filename", help=f"testcase filename")
 
     args = parser.parse_args()
 
