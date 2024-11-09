@@ -6,7 +6,7 @@ import argparse
 import re
 
 from reciter import Reciter
-from reciter_rewrite_rules import read_reciter_rules_into_dictionary
+from reciter_rewrite_rules_dictionary import read_rewrite_rules_dictionary_from_file
 
 
 def test_reciter_with_testcase_file(reciter: Reciter, filename: str):
@@ -70,19 +70,21 @@ def main():
 
     parser = argparse.ArgumentParser(description="Test the Python re-implementation of the SAM Reciter.")
 
-    parser.add_argument("--rules-filename", default=default_rules_filename,
-                        help=f"rewrite rule definition filename (default: {default_rules_filename})")
+    parser.add_argument("--rules-filename", default=None,
+                        help=f"rewrite rule definition file")
     parser.add_argument("--fix-bugs", action='store_true',
                         help="fix known bugs in the rewrite rule matching")
     parser.add_argument("filename", help=f"testcase filename")
 
     args = parser.parse_args()
 
-    # Read the rewrite rule file into a rewrite rule dictionary, and make a Reciter instance
-    # that will use those rules.
+    if args.rules_filename is None:
+        # Use the default ruleset.
+        rules_dictionary = None
+    else:
+        rules_dictionary = read_rewrite_rules_dictionary_from_file(args.rules_filename)
 
-    reciter_rules_dictionary = read_reciter_rules_into_dictionary(args.rules_filename)
-    reciter = Reciter(reciter_rules_dictionary, fix_bugs=args.fix_bugs)
+    reciter = Reciter(rules_dictionary=rules_dictionary, fix_bugs=args.fix_bugs)
 
     # Test the Reciter against testcases read from a file.
 

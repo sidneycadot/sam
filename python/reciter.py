@@ -6,7 +6,8 @@ and sold by Don't Ask Software starting in 1982.
 
 from typing import Optional
 
-from reciter_rewrite_rules import ReciterRewriteRule, ReciterCharacterClass
+from reciter_rewrite_rule import ReciterRewriteRule, ReciterCharacterClass
+from reciter_rewrite_rules_dictionary import get_default_rewrite_rules_dictionary
 
 
 class Reciter:
@@ -14,7 +15,10 @@ class Reciter:
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, rules_dictionary: dict[Optional[str], list[ReciterRewriteRule]], fix_bugs: bool):
+    def __init__(self, *, rules_dictionary: Optional[dict[Optional[str], list[ReciterRewriteRule]]] = None, fix_bugs: bool = False):
+
+        if rules_dictionary is None:
+            rules_dictionary = get_default_rewrite_rules_dictionary()
 
         self.rules_dictionary = rules_dictionary
         self.fix_bugs = fix_bugs

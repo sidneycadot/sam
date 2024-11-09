@@ -9,17 +9,19 @@ A significant complication is that the code does not write the DAC samples perio
 which is the expectation for modern hardware.
 
 The number of samples written to the DAC differs per phoneme, and even within a phoneme the time
-intervals between successive intervals are not constant.
+intervals between successive samples are not constant.
 
 To cope with this, we run the SAM 6502 code in emulation and keep a precise clock count of the
 6502 instructions emulated. When samples are written to the DAC (the low four bits of address
 0xd201, on the Atari), we know precisely the time at which this happens, expressed in clock cycles
 since the start of the program.
 
-Thus, the process of rendering SAM phones yields a list of (clock, sample tuples. In post-processing,
+Thus, the process of rendering SAM phones yields a list of (clock, sample) tuples. In post-processing,
 we re-sample these to a constant-frequency sample grid, so we end up with a list of samples at regular
 intervals. Those samples can be then sent to a modern sound playback device.
 """
+
+from sam_6502_code import SAM_6502_CODE
 
 class AudioOutputDevice:
 
@@ -50,8 +52,8 @@ class SamVirtualMachine:
         self.flag_c = False
         self.mem = bytearray(self.MEM_SIZE)
 
-        with open("sam_2000_4650.bin", "rb") as fi:
-            self.mem[0x2000:0x4651] = fi.read()
+        # Put the 6502 code image of SAM into the memory.
+        self.mem[0x2000:0x4651] = SAM_6502_CODE
 
     def write_byte(self, address: int, value: int) -> None:
         assert 0 <= value <= 255
@@ -542,6 +544,7 @@ def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float)
 
 
 def emulate_sam(phonemes: str, sam_virtual_machine_clock_frequency: float, audio_resample_rate: float) -> bytes:
+    """Render English text into 8-bit sound."""
 
     audio = AudioOutputDevice()
     svm = SamVirtualMachine(audio)
