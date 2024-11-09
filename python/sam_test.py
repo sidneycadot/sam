@@ -44,7 +44,14 @@ def main():
 
     print("phonemes ..................... :", repr(phonemes))
 
-    samples = emulate_sam(phonemes, args.clock_frequency * 1e6, args.sample_rate)
+    phonemes = "/HEHLOW DHEHR, /HAW AAR YUW DUW4IHNX TUXDEY?"
+
+    try:
+        samples = emulate_sam(phonemes, args.clock_frequency * 1e6, args.sample_rate)
+    except ValueError as exception:
+        print("SAM reported error:", exception)
+        return
+
 
     print("Number of audio samples ...... :", len(samples))
 

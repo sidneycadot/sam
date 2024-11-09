@@ -59,7 +59,7 @@ class SamVirtualMachine:
         assert 0 <= value <= 255
         if address == 0xd201:
             self.audio.write_sample(self.clocks, value)
-        elif address in (0xd20e, 0xd400, 0xd40e):
+        elif address in (0xd01f, 0xd20e, 0xd400, 0xd40e):
             pass
         else:
             # RAM write.
@@ -67,6 +67,8 @@ class SamVirtualMachine:
             self.mem[address] = value
 
     def read_byte(self, address: int) -> int:
+        if address == 0x14:  # RT-clock.
+            return (self.clocks // 1000) % 256
         assert address < self.MEM_SIZE
         return self.mem[address]
 
@@ -557,12 +559,24 @@ def emulate_sam(phonemes: str, sam_virtual_machine_clock_frequency: float, audio
     svm.mem[a:b] = phonemes_encoded
 
     # Perform a virtual JSR to the entry point of SAM, with return address zero.
+
+    svm.write_byte(0x2010, 70) # speed
+    svm.write_byte(0x2011, 64) # pitch
+
+    print("** speed:", svm.read_byte(0x2010))  # default: 70
+    print("** pitch:", svm.read_byte(0x2011))  # default: 64
+
     svm.push_word(0xffff)  # The final RTS will return to address 0.
     svm.pc = 0x2004        # SAM entry point.
 
     # Run the SAM virtual machine until it returns to address PC = 0.
     while svm.pc != 0:
         svm.execute_instruction()
+
+    sam_error = svm.read_byte(0x2013)
+
+    if sam_error != 255:
+        raise ValueError("Phoneme parsing failed at offset {}.".format(sam_error))
 
     samples = resample(audio.samples, sam_virtual_machine_clock_frequency, audio_resample_rate)
     samples = bytes(sample * 17 for sample in samples)
