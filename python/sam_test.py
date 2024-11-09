@@ -38,20 +38,17 @@ def main():
 
     reciter = Reciter()
 
-    print("source text .................. :", repr(args.source_text))
+    print("Source text .................. :", repr(args.source_text))
 
     phonemes = reciter(args.source_text)
 
-    print("phonemes ..................... :", repr(phonemes))
-
-    phonemes = "/HEHLOW DHEHR, /HAW AAR YUW DUW4IHNX TUXDEY?"
+    print("Phonemes ..................... :", repr(phonemes))
 
     try:
         samples = emulate_sam(phonemes, args.clock_frequency * 1e6, args.sample_rate)
     except ValueError as exception:
         print("SAM reported error:", exception)
         return
-
 
     print("Number of audio samples ...... :", len(samples))
 
