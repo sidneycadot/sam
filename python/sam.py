@@ -1,6 +1,6 @@
 #! /usr/bin/env -S python3 -B
 
-"""Test for SAM and (optionally) the SAM Reciter."""
+"""Test program for SAM and (optionally) the SAM Reciter."""
 
 import sys
 import argparse

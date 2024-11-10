@@ -1,8 +1,8 @@
 """SAM speech synthesizer in Python.
 
 The SAM speech synthesizer was originally written in 6502 assembly. It was released for the
-Apple II, Commodore 64, and Atari 8-bit computers in 1982. This module provides a cycle-
-exact emulation of the Atari version of SAM.
+Apple II, Commodore 64, and Atari 8-bit computers in 1982. This module provides a cycle-exact
+emulation of the Atari version of SAM.
 
 The 6502 code processes SAM-style phonemes (represented as ASCII text) and renders them as
 sound, by writing data to the 4-bit DAC of the first of the Atari's four audio channels.
@@ -21,9 +21,9 @@ instruction (at address 0x2004 in SAM).
 
 In this way, the process of rendering SAM phonemes yields a list of (clock, sample) tuples.
 
-In post-processing, we re-sample these to a constant-frequency sample grid, so we end up with a
-list of samples at regular intervals. Those samples can be then written to a WAV file, or
-passed to a modern, constant-sample-rate sound playback device.
+In post-processing, we re-sample these to a constant-frequency sample grid, so we end up with
+a list of samples at regular intervals. Those samples can be then written to a WAV file,
+or passed to a modern, constant-sample-rate sound playback device.
 """
 
 from typing import Optional
@@ -66,8 +66,8 @@ class SamVirtualMachine:
     def reset_audio_samples(self):
         """Reset the audio samples to an empty list.
 
-        Note that we do not clear() the list. This is because
-        references to that list may exist outside of the SamVirtualMachine.
+        Note that we do not clear() the list. This is because references to the list may exist
+        outside the SamVirtualMachine instance.
         """
         self.audio_samples = []
 
@@ -92,8 +92,8 @@ class SamVirtualMachine:
 
     def read_byte(self, address: int) -> int:
         """Read a single byte from SVM memory."""
-        if address == 0x14:  # RT-clock.
-            # The least significant byte of the RTCLOK
+        if address == 0x14:  # RT-clock, LSB.
+            # The least significant byte of the VBLANK clock
             # is used by SAM when making a noise to indicate
             # a phoneme parsing error. The code requires that
             # this value is increasing to return.
@@ -146,7 +146,7 @@ class SamVirtualMachine:
         return (u1 // 0x100) != (u2 // 0x100)
 
     def branch_if(self, condition: bool) -> None:
-        """Execute a branch on condition" instruction."""
+        """Execute a "branch on condition" instruction."""
         if condition:
             # branch taken.
             displacement = self.read_byte(self.pc + 1)
@@ -243,7 +243,7 @@ class SamVirtualMachine:
                 self.push_word(self.pc + 2)
                 self.pc = self.read_word(self.pc + 1)
                 self.clocks += 6
-            case 0x24:  # bit zpage
+            case 0x24:  # bit zp
                 zp_address = self.read_byte(self.pc + 1)
                 operand = self.read_byte(zp_address)
                 self.flag_n = (operand & 0x80) != 0
@@ -506,13 +506,13 @@ class SamVirtualMachine:
                 self.compare(self.a, operand)
                 self.pc += 3
                 self.clocks += 5 if self.different_pages(base_address, abs_address) else 4
-            case 0xe4:  # cpx zpage
+            case 0xe4:  # cpx zp
                 zp_address = self.read_byte(self.pc + 1)
                 operand = self.read_byte(zp_address)
                 self.compare(self.x, operand)
                 self.pc += 2
                 self.clocks += 3
-            case 0xe5:  # sbc zpage
+            case 0xe5:  # sbc zp
                 zp_address = self.read_byte(self.pc + 1)
                 operand = self.read_byte(zp_address)
                 self.subtract_with_borrow(operand)

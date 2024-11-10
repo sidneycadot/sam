@@ -57,6 +57,7 @@ def main():
     reciter = Reciter()
     sam = SamEmulator()
 
+    # Some fixups to make SAM sound better.
     replacements = {
         "zero"  : "0",
         "one"   : "1",
@@ -74,9 +75,7 @@ def main():
         "9ty"   : "ni'nty"
     }
 
-    ba = bytearray()
-
-    for k in range(85, 1001):
+    for k in range(0, 1001):
         english = as_english_number(k)
 
         reciter_input = english
@@ -89,9 +88,6 @@ def main():
         print(f"{english:20} -> {reciter_input:30} -> {phonemes:30}")
         samples = sam.render_audio_samples(phonemes)
         play_sound(samples, 48000, -10.0)
-        ba.extend(samples)
-
-    #write_wav_file("counter.wav", ba, 48000)
 
 
 if __name__ == "__main__":
