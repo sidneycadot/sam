@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /usr/bin/env -S python3 -B
 
 """Count from zero up to a thousand."""
 
