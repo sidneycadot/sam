@@ -3,11 +3,11 @@
 """Test for SAM and (optionally) the SAM Reciter."""
 
 import argparse
-import struct
 import time
 
 from reciter import Reciter
 from sam_emulator import SamEmulator, SamPhonemeError
+from wav_file import write_wav_file
 
 try:
     # This import will fail if the numpy and/or sounddevice modules are not installed.
@@ -15,24 +15,6 @@ try:
     play_sound_available = True  # pylint: disable=invalid-name
 except ModuleNotFoundError:
     play_sound_available = False  # pylint: disable=invalid-name
-
-def write_wav_file(filename: str, samples: bytes, sample_rate: int) -> None:
-    """Write 1-byte unsigned samples as WAV file."""
-    with open(filename, "wb") as fo:
-        # Write samples as a WAV file with a 44-byte header.
-        file_size = 44 + len(samples)
-        audio_format = 1 # pcm
-        num_channels = 1
-        byte_rate = sample_rate
-        bits_per_sample = 8
-        bytes_per_sample = 1
-        size_of_data = len(samples)
-        wav_header  = struct.pack("<4sI4s4sIHHIIHH4sI",
-                              b"RIFF", file_size, b"WAVE",
-                              b"fmt ", 16,
-                              audio_format, num_channels, sample_rate, byte_rate,
-                              bytes_per_sample, bits_per_sample, b"data", size_of_data)
-        fo.write(wav_header + samples)
 
 
 def clamp(value, min_value, max_value):
@@ -91,7 +73,12 @@ def main():
         return
     t2 = time.monotonic()
 
-    print(f"Rendered {len(samples)} audio samples in {t2-t1:.2f} seconds.")
+    audio_duration = len(samples) / args.sample_rate
+    render_time = t2 - t1
+    realtime_factor = audio_duration / render_time
+
+    print(f"Rendered {len(samples)} audio samples ({audio_duration:.2f} seconds) in {t2-t1:.2f} seconds ({realtime_factor:.2f}x realtime).")
+    print()
 
     if args.wav_file is not None:
         print(f"Writing WAV file {args.wav_file!r}.")
