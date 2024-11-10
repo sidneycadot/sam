@@ -6,12 +6,17 @@ import struct
 from reciter import Reciter
 from sam_emulator import SamEmulator, SamPhonemeError
 
+try:
+    # This import will fail if the numpy and/or sounddevice modules are not installed.
+    from sound_output import play_sound
+except ModuleNotFoundError:
+    play_sound = None
 
 def write_wav_file(filename: str, samples: bytes, sample_rate: int) -> None:
     """Write 1-byte unsigned samples as WAV file."""
     with open(filename, "wb") as fo:
         # Write samples as a WAV file with a 44-byte header.
-        filesize = 44 + len(samples)
+        file_size = 44 + len(samples)
         audio_format = 1 # pcm
         num_channels = 1
         byte_rate = sample_rate
@@ -19,23 +24,34 @@ def write_wav_file(filename: str, samples: bytes, sample_rate: int) -> None:
         bytes_per_sample = 1
         size_of_data = len(samples)
         wav_header  = struct.pack("<4sI4s4sIHHIIHH4sI",
-                              b"RIFF", filesize, b"WAVE",
+                              b"RIFF", file_size, b"WAVE",
                               b"fmt ", 16,
                               audio_format, num_channels, sample_rate, byte_rate,
                               bytes_per_sample, bits_per_sample, b"data", size_of_data)
         fo.write(wav_header + samples)
 
 
+def clamp(value, min_value, max_value):
+    """Return value clamped between min_value and max_value."""
+    assert min_value <= max_value
+    if value <= min_value:
+        return min_value
+    if value >= max_value:
+        return max_value
+    return value
+
+
 def main():
-    """Run SAM test program."""
+    """Run the SAM test program."""
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--clock-frequency", default=1.79, help="6502 clock frequency, in MHz (default: 1.79 MHz)")
     parser.add_argument("--sample-rate", default=48000, help="WAV file sample rate (default: 48000 samples/s)")
     parser.add_argument("--phonemes", "-p", action="store_true", help="render phonemes without reciter step")
-    parser.add_argument("--speed", type=int, default=70, help="SAM speed (default: 70)")
-    parser.add_argument("--pitch", type=int, default=64, help="SAM speed (default: 64)")
-    parser.add_argument("--wav-file", default="sam.wav", help="WAV file to be created")
+    parser.add_argument("--speed", type=int, default=None, help="SAM voice speed")
+    parser.add_argument("--pitch", type=int, default=None, help="SAM voice pitch")
+    parser.add_argument("--wav-file",type=str,  default=None, help="WAV file to be created")
+    parser.add_argument("--volume", type=float, default=-10.0, help="volume in dB relative to max (default: -10.0)")
     parser.add_argument("source_text", help="Text to render.")
 
     args = parser.parse_args()
@@ -43,28 +59,41 @@ def main():
     if args.phonemes:
         phonemes = args.source_text
     else:
-        print("Source text .................. :", repr(args.source_text))
+        print("Source text ...... :", repr(args.source_text))
         reciter = Reciter()
         phonemes = reciter.to_phonemes(args.source_text)
 
-    print("Phonemes ..................... :", repr(phonemes))
+    print("Phonemes ......... :", repr(phonemes))
+    print()
 
     sam = SamEmulator(args.clock_frequency * 1e6, args.sample_rate)
 
-    sam.set_speed(args.speed)
-    sam.set_pitch(args.pitch)
+    if args.speed is not None:
+        speed = clamp(args.speed, 0, 255)
+        sam.set_speed(args.speed)
+
+    if args.pitch is not None:
+        pitch = clamp(args.pitch, 0, 255)
+        sam.set_pitch(pitch)
+
+    print(f"Rendering speech with speed={sam.get_speed()}, pitch={sam.get_pitch()}, sample rate {args.sample_rate} Hz ...")
 
     try:
         samples = sam.render_audio_samples(phonemes)
     except SamPhonemeError as exception:
-        print("SAM reported phoneme error:", exception)
+        print("SAM reported a phoneme error:", exception)
         return
 
-    print("Number of audio samples ...... :", len(samples))
+    if args.wav_file is not None:
+        print(f"Writing WAV file {args.wav_file!r}.")
+        write_wav_file(args.wav_file, samples, args.sample_rate)
 
-    write_wav_file(args.wav_file, samples, args.sample_rate)
-
-    print("WAV file name ................ :", repr(args.wav_file))
+    if play_sound is None:
+        print(f"Unable to play {len(samples)} audio samples.")
+        print("Install the 'numpy' and 'sounddevice' modules to enable sound output.")
+    else:
+        print(f"Playing {len(samples)} audio samples.")
+        play_sound(samples, args.sample_rate, args.volume)
 
 
 if __name__ == "__main__":

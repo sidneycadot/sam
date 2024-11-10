@@ -581,12 +581,20 @@ class SamEmulator:
         self.audio = AudioOutputDevice()
         self.svm = SamVirtualMachine(self.audio)
 
-    def set_speed(self, value: int):
-        """The default value is 70."""
+    def get_speed(self) -> int:
+        """Get SAM voice speed. The default value is 70."""
+        return self.svm.read_byte(0x2010)
+
+    def set_speed(self, value: int) -> None:
+        """Set SAM voice speed. The default value is 70."""
         self.svm.write_byte(0x2010, value)
 
+    def get_pitch(self) -> int:
+        """Get SAM voice pitch. The default value is 64."""
+        return self.svm.read_byte(0x2011)
+
     def set_pitch(self, value: int):
-        """The default value is 64."""
+        """Set SAM voice pitch. The default value is 70."""
         self.svm.write_byte(0x2011, value)
 
     def render_timestamped_dac_samples(self, phonemes: str) -> list[tuple[int, int]]:
