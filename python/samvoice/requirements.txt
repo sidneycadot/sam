@@ -1,0 +1,5 @@
+# Requirements for the "samvoice" package.
+
+# The "numpy" and "sounddevice" packages are needed to be able to play the generated audio.
+numpy
+sounddevice

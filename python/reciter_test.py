@@ -5,8 +5,7 @@
 import argparse
 import re
 
-from reciter import Reciter
-from reciter_rewrite_rules_dictionary import read_rewrite_rules_dictionary_from_file
+from samvoice import Reciter, read_rewrite_rules_dictionary_from_file
 
 
 def test_reciter_with_testcase_file(reciter: Reciter, filename: str):

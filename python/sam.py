@@ -6,16 +6,7 @@ import sys
 import argparse
 import time
 
-from reciter import Reciter
-from sam_emulator import SamEmulator, SamPhonemeError
-from wav_file import write_wav_file
-
-try:
-    # This import will fail if the numpy and/or sounddevice modules are not installed.
-    from sound_output import play_sound
-    play_sound_available = True   # pylint: disable=invalid-name
-except ModuleNotFoundError:
-    play_sound_available = False  # pylint: disable=invalid-name
+from samvoice import Reciter, SamEmulator, SamPhonemeError, write_wav_file, play_sound
 
 
 def clamp(value, min_value, max_value):
@@ -99,14 +90,13 @@ def main():
         write_wav_file(args.wav_file, samples, args.sample_rate)
 
     if not args.silent:
-        if play_sound_available:
+        if play_sound is not None:
             if args.use_stdout:
                 print("Playing audio samples.")
             play_sound(samples, args.sample_rate, args.volume)
         else:
-            if args.use_stdout:
-                print("Unable to play audio samples.", file=sys.stderr)
-                print("Install the 'numpy' and 'sounddevice' modules to enable sound output.", file=sys.stderr)
+            print("Unable to play audio samples.", file=sys.stderr)
+            print("Install the 'numpy' and 'sounddevice' modules to enable sound output.", file=sys.stderr)
 
 
 if __name__ == "__main__":

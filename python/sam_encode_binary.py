@@ -1,6 +1,9 @@
 #! /usr/bin/env python3
 
-"""Encode file as a string."""
+"""This is a build tool to encode binary file as a string for use in a Python source.
+
+We use it to generate code for the 'sam_6502_code.py' that is part of the "samvoice" package.
+"""
 
 import gzip
 import base64
@@ -8,7 +11,7 @@ import base64
 def main():
     """Encode the "sam_2000_4650.bin" executable for inclusion as Python source code."""
 
-    filename = "sam_2000_4650.bin"
+    filename = "data/sam_2000_4650.bin"
     with open(filename, "rb") as fi:
         data = fi.read()
 

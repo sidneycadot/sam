@@ -2,9 +2,7 @@
 
 """Minimal working example for SAM."""
 
-from reciter import Reciter
-from sam_emulator import SamEmulator
-from sound_output import play_sound
+from samvoice import Reciter, SamEmulator, play_sound
 
 
 def main():
@@ -13,7 +11,7 @@ def main():
     reciter = Reciter()
     sam = SamEmulator()
 
-    phonemes = reciter.to_phonemes("The quick brown fox jumps over the lazy dog.")
+    phonemes = reciter.to_phonemes("Hello, world!")
     samples = sam.render_audio_samples(phonemes)
     play_sound(samples, 48000, -10.0)
 
