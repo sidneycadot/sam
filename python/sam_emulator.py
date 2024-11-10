@@ -31,31 +31,6 @@ from typing import Optional
 from sam_6502_code import SAM_6502_CODE
 
 
-class AudioOutputDevice:
-    """The AudioOutputDevice captures successive DAC writes."""
-    def __init__(self):
-        self.clock_offset = None
-        self.samples = []
-    def reset(self):
-        """Reset the AudioOutputDevice.
-
-        Note that we re-assign the 'samples' field to an empoty list,
-        rather than using clear(); the samples field may have been
-        copied and we don't want to clear a list that is not under our
-        control.
-        """
-        self.clock_offset = None
-        self.samples = []
-    def write_sample(self, clock: int, sample: int) -> None:
-        """Process an incoming DAC sample, at a given moment in time."""
-        assert 16 <= sample <= 31
-        sample -= 16
-        if self.clock_offset is None:
-            self.clock_offset = clock
-        #print("## {:10d} {:3d}".format(clock - self.clock_offset, sample))
-        self.samples.append((clock - self.clock_offset, sample))
-
-
 class SamVirtualMachine:
     """The SAM Virtual Machine is a partial implementation of a 6502 CPU with some RAM memory.
 
@@ -72,8 +47,7 @@ class SamVirtualMachine:
 
     MEM_SIZE = 0x4651  # Last address of RAM, plus 1.
 
-    def __init__(self, audio: AudioOutputDevice):
-        self.audio = audio
+    def __init__(self):
         self.clocks = 0
         self.pc = 0
         self.sp = 0xff
@@ -84,15 +58,31 @@ class SamVirtualMachine:
         self.flag_z = True
         self.flag_c = False
         self.mem = bytearray(self.MEM_SIZE)
+        self.audio_samples: list[tuple[int, int]] = []
 
         # Put the 6502 code image of SAM into the memory.
         self.mem[0x2000:0x4651] = SAM_6502_CODE
+
+    def reset_audio_samples(self):
+        """Reset the audio samples to an empty list.
+
+        Note that we do not clear() the list. This is because
+        references to that list may exist outside of the SamVirtualMachine.
+        """
+        self.audio_samples = []
+
+    def process_audio_sample(self, sample: int) -> None:
+        """Process an incoming DAC sample, at a given moment in time."""
+        assert 0 <= sample <= 15
+        self.audio_samples.append((self.clocks, sample))
+        # print("## {:10d} {:3d}".format(clock - self.audio_samples[0][0], sample))
 
     def write_byte(self, address: int, value: int) -> None:
         """Write a single byte to SVM memory."""
         assert 0 <= value <= 255
         if address == 0xd201:
-            self.audio.write_sample(self.clocks, value)
+            assert 16 <= value <= 31
+            self.process_audio_sample(value - 16)
         elif address in (0xd01f, 0xd20e, 0xd400, 0xd40e):
             pass
         else:
@@ -575,13 +565,14 @@ def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float)
 
         for (clock, sample) in samples_in:
 
-            # Take care of the input clock (make it zero-based).
+            # Clock samples are translated so that the first sample is at t=0.
             if input_clock_offset is None:
                 input_clock_offset = clock
             clock -= input_clock_offset
-            assert 0 <= sample <= 15
 
+            # Generate new output samples while we can.
             while True:
+                # The time for which we want to generate the next output sample.
                 t_wanted = len(output_samples) / freq_out
 
                 if t_wanted > clock / freq_in:
@@ -601,7 +592,10 @@ def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float)
         # We know that clock and sample have been set, because the samples_in list is not empty.
         #   pylint: disable=undefined-loop-variable
 
+        # The time for which we want to generate the next output sample.
         t_wanted = len(output_samples) / freq_out
+
+        # Only generate this last sample if it hasn't been generated before.
         if t_wanted > clock / freq_in:
             output_samples.append(sample)
 
@@ -625,8 +619,7 @@ class SamEmulator:
 
         self.sam_virtual_machine_clock_frequency = sam_virtual_machine_clock_frequency
         self.audio_resample_rate = audio_resample_rate
-        self.audio = AudioOutputDevice()
-        self.svm = SamVirtualMachine(self.audio)
+        self.svm = SamVirtualMachine()
 
     def get_speed(self) -> int:
         """Get SAM voice speed. The default value is 70."""
@@ -655,8 +648,14 @@ class SamEmulator:
         self.svm.mem[first:last] = phonemes_encoded
 
         # Perform a virtual JSR to the entry point of SAM, with return address zero.
+        # When the SAM subroutine returns, the PC will thus be set to zero, which
+        # we detect in the loop below.
+
         self.svm.push_word(0xffff)  # The final RTS will return to address 0.
         self.svm.pc = 0x2004        # SAM entry point.
+
+        # Verify that the SVM does not currently hold any audio samples.
+        assert len(self.svm.audio_samples) == 0  # Should be empty, here.
 
         # Run the SAM virtual machine until it returns to address PC = 0.
         while self.svm.pc != 0:
@@ -667,8 +666,8 @@ class SamEmulator:
         if sam_error != 255:
             raise SamPhonemeError(f"Phoneme parsing failed at offset {sam_error}.")
 
-        samples = self.audio.samples
-        self.audio.reset()
+        samples = self.svm.audio_samples
+        self.svm.reset_audio_samples()
 
         return samples
 
