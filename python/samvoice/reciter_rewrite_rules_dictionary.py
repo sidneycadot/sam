@@ -6,7 +6,7 @@ import re
 import textwrap
 from typing import Optional
 
-from python.samvoice.reciter_rewrite_rule import ReciterRewriteRule
+from .reciter_rewrite_rule import ReciterRewriteRule
 
 type ReciterRewriteRulesDictionary = dict[Optional[str], list[ReciterRewriteRule]]
 

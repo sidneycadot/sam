@@ -36,6 +36,8 @@ english_numbers_to_words = {
 }
 
 def as_english_number(n: int) -> str:
+    """Represent a number as an English-language string."""
+    # pylint: disable=consider-using-f-string
     assert 0 <= n <= 1000
     s = english_numbers_to_words.get(n)
     if s is not None:
@@ -46,8 +48,8 @@ def as_english_number(n: int) -> str:
         if n % 100 == 0:
             return "{} hundred".format(as_english_number(n // 100))
         return "{} and {}".format(as_english_number(n - n % 100), as_english_number(n % 100))
-    if n == 1000:
-        return "one thousand"
+    assert n == 1000
+    return "one thousand"
 
 def main():
     """Count in English."""

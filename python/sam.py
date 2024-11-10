@@ -90,7 +90,7 @@ def main():
         write_wav_file(args.wav_file, samples, args.sample_rate)
 
     if not args.silent:
-        if play_sound is not None:
+        if play_sound.available:
             if args.use_stdout:
                 print("Playing audio samples.")
             play_sound(samples, args.sample_rate, args.volume)

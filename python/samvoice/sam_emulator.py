@@ -28,7 +28,7 @@ passed to a modern, constant-sample-rate sound playback device.
 
 from typing import Optional
 
-from python.samvoice.sam_6502_code import SAM_6502_CODE
+from .sam_6502_code import SAM_6502_CODE
 
 
 class SamVirtualMachine:

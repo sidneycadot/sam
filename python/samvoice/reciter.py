@@ -6,8 +6,8 @@ and sold by Don't Ask Software starting in 1982.
 
 from typing import Optional
 
-from python.samvoice.reciter_rewrite_rule import ReciterRewriteRule, ReciterCharacterClass
-from python.samvoice.reciter_rewrite_rules_dictionary import get_default_rewrite_rules_dictionary
+from .reciter_rewrite_rule import ReciterRewriteRule, ReciterCharacterClass
+from .reciter_rewrite_rules_dictionary import get_default_rewrite_rules_dictionary
 
 
 class Reciter:

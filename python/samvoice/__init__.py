@@ -18,7 +18,4 @@ from .sam_emulator import SamEmulator, SamPhonemeError
 # Miscellaneous functions.
 from .wav_file import write_wav_file
 
-try:
-    from .play_sound import play_sound
-except ModuleNotFoundError:
-    play_sound = None
+from .play_sound import play_sound
