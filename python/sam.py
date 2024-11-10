@@ -2,6 +2,7 @@
 
 """Test for SAM and (optionally) the SAM Reciter."""
 
+import sys
 import argparse
 import time
 
@@ -12,7 +13,7 @@ from wav_file import write_wav_file
 try:
     # This import will fail if the numpy and/or sounddevice modules are not installed.
     from sound_output import play_sound
-    play_sound_available = True  # pylint: disable=invalid-name
+    play_sound_available = True   # pylint: disable=invalid-name
 except ModuleNotFoundError:
     play_sound_available = False  # pylint: disable=invalid-name
 
@@ -29,29 +30,37 @@ def clamp(value, min_value, max_value):
 
 def main():
     """Run the SAM test program."""
+
+    # pylint: disable=too-many-branches, too-many-statements
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--clock-frequency", default=1.79, help="6502 clock frequency, in MHz (default: 1.79 MHz)")
     parser.add_argument("--sample-rate", default=48000, help="WAV file sample rate (default: 48000 samples/s)")
-    parser.add_argument("--phonemes", "-p", action="store_true", help="render phonemes without reciter step")
+    parser.add_argument("--phonemes", "-p", action="store_true", help="render phonemes directly (disable reciter)")
     parser.add_argument("--silent", "-s", action="store_true", help="do not play rendered audio samples")
     parser.add_argument("--speed", type=int, default=None, help="SAM voice speed")
     parser.add_argument("--pitch", type=int, default=None, help="SAM voice pitch")
     parser.add_argument("--wav-file",type=str,  default=None, help="WAV file to be created")
     parser.add_argument("--volume", type=float, default=-10.0, help="volume in dB relative to max (default: -10.0)")
-    parser.add_argument("source_text", help="Text to render.")
+    parser.add_argument("--noprint", dest="use_stdout", action="store_false",
+                        help="do not produce output on stdout")
+    parser.add_argument("source_text", metavar="<text-or-phonemes>",
+                        help="source text (or phonemes, if the -p flag is used) to render as sound")
 
     args = parser.parse_args()
 
     if args.phonemes:
         phonemes = args.source_text
     else:
-        print("Source text ...... :", repr(args.source_text))
+        if args.use_stdout:
+            print("Source text ...... :", repr(args.source_text))
         reciter = Reciter()
         phonemes = reciter.to_phonemes(args.source_text)
 
-    print("Phonemes ......... :", repr(phonemes))
-    print()
+    if args.use_stdout:
+        print("Phonemes ......... :", repr(phonemes))
+        print()
 
     sam = SamEmulator(args.clock_frequency * 1e6, args.sample_rate)
 
@@ -63,34 +72,41 @@ def main():
         pitch = clamp(args.pitch, 0, 255)
         sam.set_pitch(pitch)
 
-    print(f"Rendering speech with speed={sam.get_speed()}, pitch={sam.get_pitch()}, sample rate {args.sample_rate} Hz ...")
+    if args.use_stdout:
+        print(f"Rendering speech with speed={sam.get_speed()}, pitch={sam.get_pitch()}, sample rate {args.sample_rate} Hz ...")
 
     t1 = time.monotonic()
     try:
         samples = sam.render_audio_samples(phonemes)
     except SamPhonemeError as exception:
-        print("SAM reported a phoneme error:", exception)
+        print("SAM reported a phoneme error:", exception, file=sys.stderr)
         return
     t2 = time.monotonic()
 
-    audio_duration = len(samples) / args.sample_rate
-    render_time = t2 - t1
-    realtime_factor = audio_duration / render_time
+    if args.use_stdout:
 
-    print(f"Rendered {len(samples)} audio samples ({audio_duration:.2f} seconds) in {t2-t1:.2f} seconds ({realtime_factor:.2f}x realtime).")
-    print()
+        audio_duration = len(samples) / args.sample_rate
+        render_time = t2 - t1
+        realtime_factor = audio_duration / render_time
+
+        print(f"Rendered {len(samples)} audio samples ({audio_duration:.2f} seconds) "
+              f"in {t2-t1:.2f} seconds ({realtime_factor:.2f}x realtime).")
+        print()
 
     if args.wav_file is not None:
-        print(f"Writing WAV file {args.wav_file!r}.")
+        if args.use_stdout:
+            print(f"Writing WAV file {args.wav_file!r}.")
         write_wav_file(args.wav_file, samples, args.sample_rate)
 
     if not args.silent:
         if play_sound_available:
-            print("Playing audio samples.")
+            if args.use_stdout:
+                print("Playing audio samples.")
             play_sound(samples, args.sample_rate, args.volume)
         else:
-            print("Unable to play audio samples.")
-            print("Install the 'numpy' and 'sounddevice' modules to enable sound output.")
+            if args.use_stdout:
+                print("Unable to play audio samples.", file=sys.stderr)
+                print("Install the 'numpy' and 'sounddevice' modules to enable sound output.", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,7 @@
-"""The 6502 code image of SAM, gzipped and base64-encoded."""
+"""The 6502 code image of SAM, gzipped and base64-encoded.
+
+The Atari version of SAM has a size of 9809 bytes, and occupies memory from 0x2000 to 0x4650 (inclusive).
+"""
 
 import gzip
 import base64
