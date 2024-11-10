@@ -4,7 +4,8 @@ import argparse
 import struct
 
 from reciter import Reciter
-from sam_emulator import emulate_sam
+from sam_emulator import SamEmulator, SamPhonemeError
+
 
 def write_wav_file(filename: str, samples: bytes, sample_rate: int) -> None:
     """Write 1-byte unsigned samples as WAV file."""
@@ -30,24 +31,33 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--clock-frequency", default=1.79, help="6502 clock frequency, in MHz (default: 1.79 MHz)")
-    parser.add_argument("--sample-rate", default=48000, help="WAV file sample rate (default: 48000 samples/s")
+    parser.add_argument("--sample-rate", default=48000, help="WAV file sample rate (default: 48000 samples/s)")
+    parser.add_argument("--phonemes", "-p", action="store_true", help="render phonemes without reciter step")
+    parser.add_argument("--speed", type=int, default=70, help="SAM speed (default: 70)")
+    parser.add_argument("--pitch", type=int, default=64, help="SAM speed (default: 64)")
     parser.add_argument("--wav-file", default="sam.wav", help="WAV file to be created")
     parser.add_argument("source_text", help="Text to render.")
 
     args = parser.parse_args()
 
-    reciter = Reciter()
-
-    print("Source text .................. :", repr(args.source_text))
-
-    phonemes = reciter(args.source_text)
+    if args.phonemes:
+        phonemes = args.source_text
+    else:
+        print("Source text .................. :", repr(args.source_text))
+        reciter = Reciter()
+        phonemes = reciter.to_phonemes(args.source_text)
 
     print("Phonemes ..................... :", repr(phonemes))
 
+    sam = SamEmulator(args.clock_frequency * 1e6, args.sample_rate)
+
+    sam.set_speed(args.speed)
+    sam.set_pitch(args.pitch)
+
     try:
-        samples = emulate_sam(phonemes, args.clock_frequency * 1e6, args.sample_rate)
-    except ValueError as exception:
-        print("SAM reported error:", exception)
+        samples = sam.render_audio_samples(phonemes)
+    except SamPhonemeError as exception:
+        print("SAM reported phoneme error:", exception)
         return
 
     print("Number of audio samples ...... :", len(samples))

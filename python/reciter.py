@@ -23,7 +23,8 @@ class Reciter:
         self.rules_dictionary = rules_dictionary
         self.fix_bugs = fix_bugs
 
-    def __call__(self, source: str) -> str:
+    def to_phonemes(self, source: str) -> str:
+        """Render source text as phonemes."""
 
         # Prepend a space character and map the individual characters to the range 0x00..0x5f.
         source_characters = [' ']

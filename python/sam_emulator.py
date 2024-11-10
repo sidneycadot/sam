@@ -1,39 +1,52 @@
 """SAM speech synthesizer in Python.
 
-The SAM speech synthesizer was written in 6502 assembly.
+The SAM speech synthesizer was originally written in 6502 assembly. It was released for the
+Apple II, Commodore 64, and Atari 8-bit computers in 1982. This module provides a cycle-
+exact emulation of the Atari version of SAM.
 
-It processes SAM-style phonemes (represented as ASCII text) and renders those as sound,
-by writing data to the 4-bit DAC of the first audio channel of the Atari.
+The 6502 code processes SAM-style phonemes (represented as ASCII text) and renders them as
+sound, by writing data to the 4-bit DAC of the first of the Atari's four audio channels.
 
-A significant complication is that the code does not write the DAC samples periodically at all,
-which is the expectation for modern hardware.
+A significant complication is that the 6502 code does not write DAC samples at a fixed
+rate which is the way that modern hardware processes sample data.
 
-The number of samples written to the DAC differs per phoneme, and even within a phoneme the time
-intervals between successive samples are not constant.
+The rate at which samples are written to the DAC differs per phoneme, and even within a
+phoneme the time intervals between successive samples are not constant.
 
-To cope with this, we run the SAM 6502 code in emulation and keep a precise clock count of the
-6502 instructions emulated. When samples are written to the DAC (the low four bits of address
-0xd201, on the Atari), we know precisely the time at which this happens, expressed in clock cycles
-since the start of the program.
+To exactly reproduce SAM's behavior, we are therefore forced to effectively emulate the
+6502 code, and to keep a precise clock count of the 6502 instructions emulated. When samples
+are written to the DAC (the low four bits of address 0xd201, on the Atari), we then know
+precisely the time at which this happens, expressed in clock cycles since the first
+instruction (at address 0x2004 in SAM).
 
-Thus, the process of rendering SAM phones yields a list of (clock, sample) tuples. In post-processing,
-we re-sample these to a constant-frequency sample grid, so we end up with a list of samples at regular
-intervals. Those samples can be then sent to a modern sound playback device.
+In this way, the process of rendering SAM phonemes yields a list of (clock, sample) tuples.
+
+In post-processing, we re-sample these to a constant-frequency sample grid, so we end up with a
+list of samples at regular intervals. Those samples can be then written to a WAV file, or
+passed to a modern, constant-sample-rate sound playback device.
 """
+
+from typing import Optional
 
 from sam_6502_code import SAM_6502_CODE
 
-class AudioOutputDevice:
 
+class AudioOutputDevice:
+    """The AudioOutputDevice captures successive DAC writes."""
     def __init__(self):
+        self.clock_offset = None
+        self.samples = []
+    def reset(self):
         self.clock_offset = None
         self.samples = []
     def write_sample(self, clock: int, sample: int) -> None:
         assert 16 <= sample <= 31
+        sample -= 16
         if self.clock_offset is None:
             self.clock_offset = clock
         #print("## {:10d} {:3d}".format(clock - self.clock_offset, sample))
-        self.samples.append((clock - self.clock_offset, sample & 15))
+        self.samples.append((clock - self.clock_offset, sample))
+
 
 class SamVirtualMachine:
 
@@ -507,17 +520,16 @@ class SamVirtualMachine:
             case _:
                 raise RuntimeError(f"Unhandled instruction: 0x{instruction:02x}")
 
-def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float) -> list[int]:
 
+def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float) -> list[int]:
     input_clock_offset = None
     output_samples = []
 
-    previous_clock = None
     previous_sample = None
 
     for (clock, sample) in samples_in:
 
-        # take care of the input clock (make it zero-based).
+        # Take care of the input clock (make it zero-based).
         if input_clock_offset is None:
             input_clock_offset = clock
         clock -= input_clock_offset
@@ -538,47 +550,79 @@ def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float)
 
         previous_sample = sample
 
-    t_wanted = len(output_samples) / freq_out
-    if t_wanted > clock / freq_in:
-        output_samples.append(sample)
+    # All samples have been processed.
+    # Check if we will emit a last output sample to represent the
+    # very last (clock, sample) pair.
+
+    if len(samples_in) != 0:
+        t_wanted = len(output_samples) / freq_out
+        if t_wanted > clock / freq_in:
+            output_samples.append(sample)
 
     return output_samples
 
 
-def emulate_sam(phonemes: str, sam_virtual_machine_clock_frequency: float, audio_resample_rate: float) -> bytes:
-    """Render English text into 8-bit sound."""
+class SamPhonemeError(Exception):
+    pass
 
-    audio = AudioOutputDevice()
-    svm = SamVirtualMachine(audio)
 
-    phonemes_encoded = phonemes.encode('ascii')[:255] + b'\x9b'
+class SamEmulator:
 
-    a = 0x2014
-    b = 0x2014 + len(phonemes_encoded)
+    def __init__(self, sam_virtual_machine_clock_frequency: Optional[float] = None, audio_resample_rate: Optional[float] = None):
 
-    svm.mem[a:b] = phonemes_encoded
+        if sam_virtual_machine_clock_frequency is None:
+            sam_virtual_machine_clock_frequency = 1.79e6
 
-    # Perform a virtual JSR to the entry point of SAM, with return address zero.
+        if audio_resample_rate is None:
+            audio_resample_rate = 48000.0
+    
+        self.sam_virtual_machine_clock_frequency = sam_virtual_machine_clock_frequency
+        self.audio_resample_rate = audio_resample_rate
+        self.audio = AudioOutputDevice()
+        self.svm = SamVirtualMachine(self.audio)
 
-    svm.write_byte(0x2010, 70) # speed
-    svm.write_byte(0x2011, 64) # pitch
+    def set_speed(self, value: int):
+        """The default value is 70."""
+        self.svm.write_byte(0x2010, value)
 
-    print("** speed:", svm.read_byte(0x2010))  # default: 70
-    print("** pitch:", svm.read_byte(0x2011))  # default: 64
+    def set_pitch(self, value: int):
+        """The default value is 64."""
+        self.svm.write_byte(0x2011, value)
 
-    svm.push_word(0xffff)  # The final RTS will return to address 0.
-    svm.pc = 0x2004        # SAM entry point.
+    def render_timestamped_dac_samples(self, phonemes: str) -> list[tuple[int, int]]:
+        """Render English text into 8-bit sound by emulating a 6502 and running SAM."""
 
-    # Run the SAM virtual machine until it returns to address PC = 0.
-    while svm.pc != 0:
-        svm.execute_instruction()
+        phonemes_encoded = phonemes.encode('ascii')[:255] + b'\x9b'
 
-    sam_error = svm.read_byte(0x2013)
+        first = 0x2014
+        last  = 0x2014 + len(phonemes_encoded)
 
-    if sam_error != 255:
-        raise ValueError("Phoneme parsing failed at offset {}.".format(sam_error))
+        self.svm.mem[first:last] = phonemes_encoded
 
-    samples = resample(audio.samples, sam_virtual_machine_clock_frequency, audio_resample_rate)
-    samples = bytes(sample * 17 for sample in samples)
+        # Perform a virtual JSR to the entry point of SAM, with return address zero.
+        self.svm.push_word(0xffff)  # The final RTS will return to address 0.
+        self.svm.pc = 0x2004        # SAM entry point.
 
-    return samples
+        # Run the SAM virtual machine until it returns to address PC = 0.
+        while self.svm.pc != 0:
+            self.svm.execute_instruction()
+
+        sam_error = self.svm.read_byte(0x2013)
+
+        if sam_error != 255:
+            raise SamPhonemeError("Phoneme parsing failed at offset {}.".format(sam_error))
+
+        samples = self.audio.samples
+        self.audio.reset()
+
+        return samples
+
+    def render_audio_samples(self, phonemes: str) -> bytes:
+        """Render phonemes as 8-bit audio samples."""
+
+        timestamped_dac_samples = self.render_timestamped_dac_samples(phonemes)
+
+        resampled_samples = resample(timestamped_dac_samples, self.sam_virtual_machine_clock_frequency, self.audio_resample_rate)
+
+        # We multiply each of the 0..15 samples by 17, to scale them to 0, 17, 34, ..., 255.
+        return bytes(sample * 17 for sample in resampled_samples)

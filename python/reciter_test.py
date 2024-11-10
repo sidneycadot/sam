@@ -45,7 +45,7 @@ def test_reciter_with_testcase_file(reciter: Reciter, filename: str):
             raise RuntimeError(f"Bad testcase: {testcase!r}.")
         reciter_input = match.group(1)
         reciter_reference_output = match.group(2)
-        reciter_test_output = reciter(reciter_input)
+        reciter_test_output = reciter.to_phonemes(reciter_input)
         if reciter_test_output == reciter_reference_output:
             success_count +=1
         else:
