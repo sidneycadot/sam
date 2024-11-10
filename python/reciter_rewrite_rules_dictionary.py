@@ -8,14 +8,15 @@ from typing import Optional
 
 from reciter_rewrite_rule import ReciterRewriteRule
 
+type ReciterRewriteRulesDictionary = dict[Optional[str], list[ReciterRewriteRule]]
 
-def parse_rewrite_rules_dictionary(rule_lines: str) -> dict[Optional[str], list[ReciterRewriteRule]]:
+def parse_rewrite_rules_dictionary(rule_lines: str) -> ReciterRewriteRulesDictionary:
     """Utility class to read string file containing SAM Reciter rewrite rules and return them as a key-indexed dictionary."""
 
     # Prepare empty rules dictionary with all keys (None and A..Z), but no rules.
-    rules_dictionary = {None: []}
-    for key in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-        rules_dictionary[key] = []
+    rules_dictionary: ReciterRewriteRulesDictionary = {None: []}
+    for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        rules_dictionary[letter] = []
 
     key = None  # Start processing rules with key value: None.
 
@@ -55,7 +56,7 @@ def parse_rewrite_rules_dictionary(rule_lines: str) -> dict[Optional[str], list[
     return rules_dictionary
 
 
-def read_rewrite_rules_dictionary_from_file(filename: str) -> dict[Optional[str], list[ReciterRewriteRule]]:
+def read_rewrite_rules_dictionary_from_file(filename: str) -> ReciterRewriteRulesDictionary:
     """Utility class to read a file containing SAM Reciter rewrite rules and return them as a key-indexed dictionary."""
 
     # Read the entire file.
@@ -65,7 +66,12 @@ def read_rewrite_rules_dictionary_from_file(filename: str) -> dict[Optional[str]
     return parse_rewrite_rules_dictionary(rule_lines)
 
 
-def get_default_rewrite_rules_dictionary() -> dict[Optional[str], list[ReciterRewriteRule]]:
+def get_default_rewrite_rules_dictionary() -> ReciterRewriteRulesDictionary:
+    """Return the default rewrite-rule dictionary as used by the SAM Reciter.
+
+    This is a verbatim list of the English-language rules as used in the assembly version of the Reciter.
+    """
+
     rule_lines = textwrap.dedent("""
     (A)=
     (!)=.

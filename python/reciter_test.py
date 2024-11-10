@@ -66,15 +66,11 @@ def main():
 
     # Parse command line arguments.
 
-    default_rules_filename = "reciter_rules_english.txt"
-
     parser = argparse.ArgumentParser(description="Test the Python re-implementation of the SAM Reciter.")
 
-    parser.add_argument("--rules-filename", default=None,
-                        help=f"rewrite rule definition file")
-    parser.add_argument("--fix-bugs", action='store_true',
-                        help="fix known bugs in the rewrite rule matching")
-    parser.add_argument("filename", help=f"testcase filename")
+    parser.add_argument("--rules-filename", default=None, help="rewrite rule definition file")
+    parser.add_argument("--fix-bugs", action='store_true', help="fix known bugs in the rewrite rule matching")
+    parser.add_argument("filename", help="testcase filename")
 
     args = parser.parse_args()
 

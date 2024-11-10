@@ -37,9 +37,17 @@ class AudioOutputDevice:
         self.clock_offset = None
         self.samples = []
     def reset(self):
+        """Reset the AudioOutputDevice.
+
+        Note that we re-assign the 'samples' field to an empoty list,
+        rather than using clear(); the samples field may have been
+        copied and we don't want to clear a list that is not under our
+        control.
+        """
         self.clock_offset = None
         self.samples = []
     def write_sample(self, clock: int, sample: int) -> None:
+        """Process an incoming DAC sample, at a given moment in time."""
         assert 16 <= sample <= 31
         sample -= 16
         if self.clock_offset is None:
@@ -49,6 +57,18 @@ class AudioOutputDevice:
 
 
 class SamVirtualMachine:
+    """The SAM Virtual Machine is a partial implementation of a 6502 CPU with some RAM memory.
+
+    The following is a list of simplifications of the CPU implemented here relative to a
+    real 6502 processor:
+
+    * The SVM does not implement interrupts.
+    * The SVM does not implement decimal mode.
+    * The SVM only implements the Zero, Negative, and Carry status flags.
+    * The SVM only supports the subset of 6502 opcodes needed to run SAM.
+    """
+
+    #pylint: disable=too-many-instance-attributes, superfluous-parens
 
     MEM_SIZE = 0x4651  # Last address of RAM, plus 1.
 
@@ -69,6 +89,7 @@ class SamVirtualMachine:
         self.mem[0x2000:0x4651] = SAM_6502_CODE
 
     def write_byte(self, address: int, value: int) -> None:
+        """Write a single byte to SVM memory."""
         assert 0 <= value <= 255
         if address == 0xd201:
             self.audio.write_sample(self.clocks, value)
@@ -80,51 +101,62 @@ class SamVirtualMachine:
             self.mem[address] = value
 
     def read_byte(self, address: int) -> int:
+        """Read a single byte from SVM memory."""
         if address == 0x14:  # RT-clock.
-            return (self.clocks // 1000) % 256
+            # The least significant byte of the RTCLOK
+            # is used by SAM when making a noise to indicate
+            # a phoneme parsing error. The code requires that
+            # this value is increasing to return.
+            return (self.clocks // 30000) % 256
         assert address < self.MEM_SIZE
         return self.mem[address]
 
     def read_word(self, address: int) -> int:
+        """Read a two-byte word from SVM memory."""
         lo = self.read_byte(address)
         hi = self.read_byte(address + 1)
         return 0x100 * hi + lo
 
     def push_byte(self, value: int) -> None:
+        """Push a single byte onto the 6502 stack."""
         assert 0 <= value <= 255
         assert 0 <= self.sp <= 255
         self.mem[0x100 + self.sp] = value
         self.sp = (self.sp - 1) & 0xff
 
-    def pop_byte(self) -> None:
+    def pop_byte(self) -> int:
+        """Push a single byte from the 6502 stack."""
         assert 0 <= self.sp <= 255
         self.sp = (self.sp + 1) & 0xff
         return self.mem[0x100 + self.sp]
 
     def push_word(self, value: int) -> None:
+        """Push a two-byte word onto the 6502 stack."""
         assert 0 <= value <= 65535
-        # high byte is pushed before low byte.
-        self.push_byte(value // 256) 
+        self.push_byte(value // 256)
         self.push_byte(value  % 256)
 
-    def pop_word(self) -> None:
-        # lo byte is popped before high byte.
+    def pop_word(self) -> int:
+        """Pop a two-byte word from the 6502 stack."""
         lo = self.pop_byte()
         hi = self.pop_byte()
         return hi * 0x100 + lo
 
     def update_nz_flags(self, value: int) -> None:
+        """Update the N and Z flag based on a value."""
         assert 0 <= value <= 255
         self.flag_z = (value == 0)
         self.flag_n = (value & 0x80) != 0
 
     @staticmethod
     def different_pages(u1: int, u2: int) -> bool:
+        """Check if two addresses are on a different page."""
         assert 0 <= u1 <= 65535
         assert 0 <= u2 <= 65535
         return (u1 // 0x100) != (u2 // 0x100)
 
     def branch_if(self, condition: bool) -> None:
+        """Execute a branch on condition" instruction."""
         if condition:
             # branch taken.
             displacement = self.read_byte(self.pc + 1)
@@ -137,38 +169,47 @@ class SamVirtualMachine:
             self.clocks += 2
 
     def set_a_register(self, value: int) -> None:
+        """Set the A register and update the Z/N flags."""
         assert 0 <= value <= 255
         self.a = value
         self.update_nz_flags(value)
 
     def set_x_register(self, value: int) -> None:
+        """Set the X register and update the Z/N flags."""
         assert 0 <= value <= 255
         self.x = value
         self.update_nz_flags(value)
 
     def set_y_register(self, value: int) -> None:
+        """Set the Y register and update the Z/N flags."""
         assert 0 <= value <= 255
         self.y = value
         self.update_nz_flags(value)
 
     def add_with_carry(self, value: int) -> None:
+        """Add value to accumulator and update the Z/N/C flags."""
         assert 0 <= value <= 255
         temp = (self.a + value + self.flag_c)
         self.set_a_register(temp & 0xff)
         self.flag_c = (temp & 0x100) != 0
 
     def subtract_with_borrow(self, value: int) -> None:
+        """Subtract value from accumulator and update the Z/N/C flags."""
         assert 0 <= value <= 255
         temp = self.a - value - (not self.flag_c)
         self.set_a_register(temp & 0xff)
         self.flag_c = (temp & 0x100) == 0  # carry = !borrow.
 
     def compare(self, register_value: int, operand: int) -> None:
+        """Compare value to accumulator and update the Z/N/C flags."""
         difference = (register_value - operand) & 0xff
         self.flag_c = (register_value >= operand)
         self.update_nz_flags(difference)
 
     def execute_instruction(self) -> None:
+        """Execute a single instruction at the current program counter location."""
+
+        # pylint: disable=too-many-statements
 
         instruction = self.read_byte(self.pc)
         #print("@@ [{:16d}] PC {:04x} OPC {:02x} A {:02x} X {:02x} Y {:02x} Z {:d} N {:d} C {:d}".format(
@@ -522,39 +563,44 @@ class SamVirtualMachine:
 
 
 def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float) -> list[int]:
-    input_clock_offset = None
-    output_samples = []
-
-    previous_sample = None
-
-    for (clock, sample) in samples_in:
-
-        # Take care of the input clock (make it zero-based).
-        if input_clock_offset is None:
-            input_clock_offset = clock
-        clock -= input_clock_offset
-        assert 0 <= sample <= 15
-
-        while True:
-            t_wanted = len(output_samples) / freq_out
-
-            if t_wanted > clock / freq_in:
-                break
-
-            if t_wanted == clock / freq_in:
-                output_samples.append(sample)
-                continue
-
-            assert previous_sample is not None
-            output_samples.append(previous_sample)
-
-        previous_sample = sample
-
-    # All samples have been processed.
-    # Check if we will emit a last output sample to represent the
-    # very last (clock, sample) pair.
+    """Resample samples on an irregular time grid onto a periodic time grid."""
+    output_samples: list[int] = []
 
     if len(samples_in) != 0:
+
+        # There is at least one sample to process.
+
+        input_clock_offset = None
+        previous_sample = None
+
+        for (clock, sample) in samples_in:
+
+            # Take care of the input clock (make it zero-based).
+            if input_clock_offset is None:
+                input_clock_offset = clock
+            clock -= input_clock_offset
+            assert 0 <= sample <= 15
+
+            while True:
+                t_wanted = len(output_samples) / freq_out
+
+                if t_wanted > clock / freq_in:
+                    break
+
+                if t_wanted == clock / freq_in:
+                    output_samples.append(sample)
+                    continue
+
+                assert previous_sample is not None
+                output_samples.append(previous_sample)
+
+            previous_sample = sample
+
+        # All samples have been processed.
+        # Check if we will emit a last output sample to represent the very last (clock, sample) pair.
+        # We know that clock and sample have been set, because the samples_in list is not empty.
+        #   pylint: disable=undefined-loop-variable
+
         t_wanted = len(output_samples) / freq_out
         if t_wanted > clock / freq_in:
             output_samples.append(sample)
@@ -563,10 +609,11 @@ def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float)
 
 
 class SamPhonemeError(Exception):
-    pass
+    """This class represents a SAM Phoneme error."""
 
 
 class SamEmulator:
+    """The SamEmulator class encapsulates a Sam Virtual Machine and knows how to run SAM in it."""
 
     def __init__(self, sam_virtual_machine_clock_frequency: Optional[float] = None, audio_resample_rate: Optional[float] = None):
 
@@ -575,7 +622,7 @@ class SamEmulator:
 
         if audio_resample_rate is None:
             audio_resample_rate = 48000.0
-    
+
         self.sam_virtual_machine_clock_frequency = sam_virtual_machine_clock_frequency
         self.audio_resample_rate = audio_resample_rate
         self.audio = AudioOutputDevice()
@@ -618,7 +665,7 @@ class SamEmulator:
         sam_error = self.svm.read_byte(0x2013)
 
         if sam_error != 255:
-            raise SamPhonemeError("Phoneme parsing failed at offset {}.".format(sam_error))
+            raise SamPhonemeError(f"Phoneme parsing failed at offset {sam_error}.")
 
         samples = self.audio.samples
         self.audio.reset()

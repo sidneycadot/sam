@@ -1,13 +1,13 @@
 """Play sound using Python's sounddevice module."""
 
+from typing import Optional
+
 import numpy as np
-import sounddevice as sd
+import sounddevice
 
-def play_sound(samples: bytes, samplerate: float, volume_db: float) -> None:
+def play_sound(samples: bytes, sample_rate: float, volume_db: Optional[float] = None) -> None:
     """Play sound samples"""
-    np_samples = np.frombuffer(samples, dtype=np.uint8)
-
-    np_samples = np_samples.astype(np.float32) / 127.5 - 1.0
+    np_samples = np.frombuffer(samples, dtype=np.uint8).astype(np.float32) / 127.5 - 1.0
 
     if volume_db is None:
         volume_db = 0.0
@@ -16,5 +16,5 @@ def play_sound(samples: bytes, samplerate: float, volume_db: float) -> None:
         signal_multiplier = 10.0 ** (volume_db / 20.0)
         np_samples *= signal_multiplier
 
-    sd.play(np_samples, samplerate)
-    sd.wait()
+    sounddevice.play(np_samples, sample_rate)
+    sounddevice.wait()

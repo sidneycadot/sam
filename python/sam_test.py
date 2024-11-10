@@ -1,7 +1,10 @@
 #! /usr/bin/env -S python3 -B
 
+"""Test for SAM and (optionally) the SAM Reciter."""
+
 import argparse
 import struct
+import time
 
 from reciter import Reciter
 from sam_emulator import SamEmulator, SamPhonemeError
@@ -9,8 +12,9 @@ from sam_emulator import SamEmulator, SamPhonemeError
 try:
     # This import will fail if the numpy and/or sounddevice modules are not installed.
     from sound_output import play_sound
+    play_sound_available = True  # pylint: disable=invalid-name
 except ModuleNotFoundError:
-    play_sound = None
+    play_sound_available = False  # pylint: disable=invalid-name
 
 def write_wav_file(filename: str, samples: bytes, sample_rate: int) -> None:
     """Write 1-byte unsigned samples as WAV file."""
@@ -48,6 +52,7 @@ def main():
     parser.add_argument("--clock-frequency", default=1.79, help="6502 clock frequency, in MHz (default: 1.79 MHz)")
     parser.add_argument("--sample-rate", default=48000, help="WAV file sample rate (default: 48000 samples/s)")
     parser.add_argument("--phonemes", "-p", action="store_true", help="render phonemes without reciter step")
+    parser.add_argument("--silent", "-s", action="store_true", help="do not play rendered audio samples")
     parser.add_argument("--speed", type=int, default=None, help="SAM voice speed")
     parser.add_argument("--pitch", type=int, default=None, help="SAM voice pitch")
     parser.add_argument("--wav-file",type=str,  default=None, help="WAV file to be created")
@@ -70,7 +75,7 @@ def main():
 
     if args.speed is not None:
         speed = clamp(args.speed, 0, 255)
-        sam.set_speed(args.speed)
+        sam.set_speed(speed)
 
     if args.pitch is not None:
         pitch = clamp(args.pitch, 0, 255)
@@ -78,22 +83,27 @@ def main():
 
     print(f"Rendering speech with speed={sam.get_speed()}, pitch={sam.get_pitch()}, sample rate {args.sample_rate} Hz ...")
 
+    t1 = time.monotonic()
     try:
         samples = sam.render_audio_samples(phonemes)
     except SamPhonemeError as exception:
         print("SAM reported a phoneme error:", exception)
         return
+    t2 = time.monotonic()
+
+    print(f"Rendered {len(samples)} audio samples in {t2-t1:.2f} seconds.")
 
     if args.wav_file is not None:
         print(f"Writing WAV file {args.wav_file!r}.")
         write_wav_file(args.wav_file, samples, args.sample_rate)
 
-    if play_sound is None:
-        print(f"Unable to play {len(samples)} audio samples.")
-        print("Install the 'numpy' and 'sounddevice' modules to enable sound output.")
-    else:
-        print(f"Playing {len(samples)} audio samples.")
-        play_sound(samples, args.sample_rate, args.volume)
+    if not args.silent:
+        if play_sound_available:
+            print("Playing audio samples.")
+            play_sound(samples, args.sample_rate, args.volume)
+        else:
+            print("Unable to play audio samples.")
+            print("Install the 'numpy' and 'sounddevice' modules to enable sound output.")
 
 
 if __name__ == "__main__":
