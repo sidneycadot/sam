@@ -1,0 +1,109 @@
+
+range               size    icnt    type      label
+================    ====    ====    ======    =============================
+0x2000 .. 0x2003       4       2    CODE      SAM_BASIC                              SAM entry point from BASIC
+0x2004 .. 0x2006       3       1    CODE      SAM_ML                                 SAM entry point from machine language
+0x2007 .. 0x200A       4       2    CODE      RECITER_BASIC                          RECITER entry point from BASIC
+0x200B .. 0x200D       3       1    CODE      RECITER_ML                             RECITER entry point from machine language
+
+0x200E .. 0x200E       1            DATA      SPEED_L1                               Settings variable
+0x200F .. 0x200F       1            DATA      PITCH_L1                               Settings variable
+0x2010 .. 0x2010       1            DATA      SPEED_L0                               Settings variable
+0x2011 .. 0x2011       1            DATA      PITCH_L0                               Settings variable
+0x2012 .. 0x2012       1            DATA      LIGHTS                                 Settings variable
+0x2013 .. 0x2013       1            DATA      ERROR                                  Status reporting to caller
+
+0x2014 .. 0x2113     256            BSS       SAM_BUFFER                             ASCII phoneme buffer (initially holds source text in RECITER).
+
+0x2114 .. 0x211B       8       4    CODE      RUN_SAM_FROM_BASIC
+0x211C .. 0x211E       3       1    CODE      RUN_SAM_FROM_MACHINE_LANGUAGE
+0x211F .. 0x21B6     152      60    CODE      SAM_SAY_PHONEMES                       Also called from RECITER.
+0x21B7 .. 0x2261     171      88    CODE      SAM_COPY_BASIC_SAM_STRING              Also called from RECITER.
+
+0x2262 .. 0x2361     256            BSS       T_PHONEMES_A                           Phonemes (1 byte per phoneme)
+0x2362 .. 0x2461     256            BSS       T_PHONEMES_B                           Speed
+0x2462 .. 0x2561     256            BSS       T_PHONEMES_C                           Stress
+
+0x2562 .. 0x256B      10            RODATA    T_STRESS                               Lookup table for stress indicators.
+
+0x256C .. 0x25BC      81            RODATA    PHONEMES_1ST                           Lookup table for 1/2 character phonemes.
+0x25BD .. 0x260D      81            RODATA    PHONEMES_2ND                           Lookup table for 1/2 character phonemes.
+
+0x260E .. 0x265B      78            RODATA    PhonemeFlags1                          Phoneme flags #1
+0x265C .. 0x26A9      78            RODATA    PhonemeFlags2                          Phoneme flags #2
+
+0x26AA .. 0x26B0       7       4    CODE      SUB_SAVE_AXY                           Only called from INSERT_PHONEME.
+0x26B1 .. 0x26B7       7       4    CODE      SUB_RESTORE_AXY                        Only called from INSERT_PHONEME.
+0x26B8 .. 0x26E9      50            CODE      INSERT_PHONEME                         Insert phoneme in T_PHONEMES_{A,B,C}
+
+0x26EA .. 0x2774     139      68    CODE      PREP_1_PARSE_ASCII_PHONEMES            Called by SAM_SAY_PHONEMES.
+0x2775 .. 0x2799      37      16    CODE      PREP_4                                 Called by SAM_SAY_PHONEMES.
+0x279A .. 0x2836     157      75    CODE      PREP_6                                 Called by SAM_SAY_PHONEMES.
+0x2837 .. 0x2A1C     486     222    CODE      PREP_2                                 Called by SAM_SAY_PHONEMES.
+0x2A1D .. 0x2A4E      50      24    CODE      PREP_3_FORWARD_STRESS                  Called by SAM_SAY_PHONEMES.
+
+0x2A4F .. 0x2A6E      32            BSS       ZEROPAGE_SAVE_RANGE_BUFFER             Used by SAM_SAVE_ZP_ADDRESSES.
+
+0x2A6F .. 0x2AD9     107            BSS                                              Garbage.
+
+0x2ADA .. 0x2AFF      38            RODATA                                           Copyright message ("COPYRIGHT 1982 DON'T ASK - ALL RIGHTS ").
+
+0x2B00 .. 0x2BFF     256            RODATA    RTAB1                                  Used in PLAY_SAMPLES_REALTIME.
+0x2C00 .. 0x2CFF     256            RODATA    RTAB2                                  Used in PLAY_SAMPLES_REALTIME.
+0x2D00 .. 0x2DFF     256            RODATA    RTAB3                                  Used in PLAY_SAMPLES_REALTIME.
+
+0x2E00 .. 0x2EFF     256            BSS       D2E00                                  Used in PLAY_SAMPLES_REALTIME.
+
+0x2F00 .. 0x2FFF     256            BSS       XTAB1                                  Used in PLAY_SAMPLES_REALTIME.
+0x3000 .. 0x30FF     256            BSS       XTAB2                                  Used in PLAY_SAMPLES_REALTIME.
+0x3100 .. 0x31FF     256            BSS       XTAB3                                  Used in PLAY_SAMPLES_REALTIME.
+
+0x3200 .. 0x32FF     256            BSS       STAB1                                  Sample buffer. Used in PLAY_SAMPLES_REALTIME.
+0x3300 .. 0x33FF     256            BSS       STAB2                                  Sample buffer. Used in PLAY_SAMPLES_REALTIME.
+0x3400 .. 0x34FF     256            BSS       STAB3                                  Sample buffer. Used in PLAY_SAMPLES_REALTIME.
+
+0x3500 .. 0x35FF     256            BSS       UTAB                                   Sample buffer. Used in PLAY_SAMPLES_REALTIME.
+
+0x3600 .. 0x364F      80            RODATA    FTAB1                                  Per-phoneme buffer #1.
+0x3650 .. 0x369F      80            RODATA    FTAB2                                  Per-phoneme buffer #2.
+0x36A0 .. 0x36EF      80            RODATA    FTAB3                                  Per-phoneme buffer #3.
+0x36F0 .. 0x373F      80            RODATA    FTAB4                                  Per-phoneme buffer #4.
+0x3740 .. 0x378F      80            RODATA    FTAB5                                  Per-phoneme buffer #5.
+0x3790 .. 0x37DF      80            RODATA    FTAB6                                  Per-phoneme buffer #6.
+0x37E0 .. 0x382F      80            RODATA    FTAB7                                  Per-phoneme buffer #7.
+0x3830 .. 0x387F      80            RODATA    FTAB8                                  Per-phoneme buffer #8.
+0x3880 .. 0x38CF      80            RODATA    FTAB9                                  Per-phoneme buffer #9.
+0x38D0 .. 0x391F      80            RODATA    FTAB10                                 Per-phoneme buffer #10.
+0x3920 .. 0x396F      80            RODATA    FTAB11                                 Per-phoneme buffer #11.
+0x3970 .. 0x39BF      80            RODATA    FTAB12                                 Per-phoneme buffer #12.
+
+0x39C0 .. 0x3EBF    1280            (?)       D39C0                                  Five pages; not understood.
+
+0x3EC0 .. 0x3EFB      60            BSS       D3EC0                                  60 bytes; not understood.
+0x3EFC .. 0x3F37      60            BSS       D3EFC                                  60 bytes; not understood.
+0x3F38 .. 0x3F73      60            BSS       D3F38                                  60 bytes; not understood.
+
+0x3F74 .. 0x3F83      16            RODATA    D3F74_GAIN                             Atari-specific gain curve (16 bytes).
+0x3F84 .. 0x3F8E      11            RODATA    D3F84                                  11 bytes. Used in PLAY_SAMPLES_REALTIME.
+
+0x3F8F .. 0x3FBF      49      27    CODE      PLAY_SAMPLES_REALTIME_SUB_1
+0x3FC0 .. 0x3FCA      11       6    CODE      SAM_SAVE_ZP_ADDRESSES
+0x3FCB .. 0x3FD5      11       6    CODE      SAM_RESTORE_ZP_ADDRESSES
+0x3FD6 .. 0x4269     660     323    CODE      PLAY_SAMPLES_REALTIME
+0x426A .. 0x42F4     139      76    CODE      PLAY_SAMPLES_REALTIME_SUB_2            Called twice in PLAY_SAMPLES_REALTIME.
+0x42F5 .. 0x4330      60      30    CODE      L42F5/PLAY_SAMPLES_REALTIME_PART2      Continuation of PLAY_SAMPLES_REALTIME.
+
+0x4331 .. 0x4335       5            RODATA    D4331                                  5 bytes; used by PLAY_SAMPLES_REALTIME_SUB_2.
+
+0x4336 .. 0x43A7     114      54    CODE      PLAY_SAMPLES_1
+
+0x43A8 .. 0x43A8       1            BSS                                              Garbage byte; 0xEA
+0x43A9 .. 0x43A9       1            BSS       SAVE_X                                 Used by PLAY_SAMPLES_2 (saves X register).
+
+0x43AA .. 0x43F1      72      32    CODE      PLAY_SAMPLES_2
+0x43F2 .. 0x452C     315     148    CODE      PREP_5
+0x452D .. 0x455F      51      28    CODE      SAM_ERROR_SOUND
+0x4560 .. 0x4560       1            BSS                                              Garbage byte; 0xA9
+
+=======================================================================================================
+                    9569    1302

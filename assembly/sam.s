@@ -515,7 +515,7 @@ T_PHONEME_C:                                    ; Stress / emphasis modulation (
 
 ; ----------------------------------------------------------------------------
 
-STRESS:  .byte   "*123456789"          ; Note: valid stress markers are the characters 1..8.
+T_STRESS:  .byte   "*123456789"        ; Note: valid stress markers are the characters 1..8.
 
 ; ----------------------------------------------------------------------------
 
@@ -767,7 +767,7 @@ PREP_1_PARSE_ASCII_PHONEMES:                    ; This is the first subroutine c
 
 @stress_candidate_loop:
 
-        cmp     STRESS,y                        ;
+        cmp     T_STRESS,y                      ;
         beq     @found_stress_modifier          ;
         dey                                     ;
         bne     @stress_candidate_loop          ;
@@ -926,7 +926,7 @@ PREP_2:                                         ; Called by SAM_SAY_PHONEMES.
 
 @nonzero_phoneme_found:
 
-cmp     #$FF                                    ; Is the phoneme $FF (the "end-of-phonemes" marker) ?
+        cmp     #$FF                            ; Is the phoneme $FF (the "end-of-phonemes" marker) ?
         bne     @process_phoneme                ;
 
         rts                                     ; Last phoneme found; we're done.
@@ -1948,7 +1948,7 @@ L404E:  lda     #0                              ;
         bcc     @399                            ;
 @402:   inc     ZP_RT_PTR_HI                    ;
         lda     ZP_RT_PTR_HI                    ;
-        cmp     #>UTAB                          ;
+        cmp     #>UTAB                          ; End of STAB3.
         beq     @500                            ;
         jmp     @150                            ;
 
