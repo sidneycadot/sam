@@ -11,7 +11,7 @@ def main():
     reciter = Reciter()
     sam = SamEmulator()
 
-    phonemes = reciter.to_phonemes("Hello, world!")
+    phonemes = reciter.to_phonemes("Hello, my name is Sam. I am a speech synthesizer on a disk.")
     samples = sam.render_audio_samples(phonemes)
     play_sound(samples, 48000, -10.0)
 
