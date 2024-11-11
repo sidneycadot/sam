@@ -1766,15 +1766,17 @@ L3FE3:  ldy     ZP_RT_TEMP9                     ;
 
 @100:   cmp     #1                              ;
         bne     @101                            ;
-        jmp     L42F5                           ;
+        jmp     PLAY_SAMPLES_REALTIME_PROCEED_1 ;
 
 @101:   cmp     #2                              ;
-        bne     L3FFF                           ;
-        jmp     L42FB                           ;
+        bne     PLAY_SAMPLES_REALTIME_LOOP      ;
+        jmp     PLAY_SAMPLES_REALTIME_PROCEED_2 ;
 
 ; ----------------------------------------------------------------------------
 
-L3FFF:  lda     D3EFC,y                         ;
+PLAY_SAMPLES_REALTIME_LOOP:
+
+        lda     D3EFC,y                         ;
         sta     ZP_RT_TEMP8                     ;
         lda     D3F38,y                         ;
         sta     ZP_RT_TEMP7                     ;
@@ -2214,23 +2216,29 @@ PLAY_SAMPLES_REALTIME_SUB_2:
 
 ; ----------------------------------------------------------------------------
 
-        ; Continuation / end of PLAY_SAMPLES_REALTIME.
+        ; Continuation of PLAY_SAMPLES_REALTIME.
 
-L42F5:  lda     #1                              ;
+PLAY_SAMPLES_REALTIME_PROCEED_1:                ; Jumped into from PLAY_SAMPLES_REALTIME
+
+        lda     #1                              ;
         sta     ZP_RT_TEMP11                    ;
-        bne     L42FF                           ;
+        bne     PLAY_SAMPLES_REALTIME_PROCEED   ; Skip down.
 
-L42FB:  lda     #$FF                            ;
+PLAY_SAMPLES_REALTIME_PROCEED_2:
+
+        lda     #$FF                            ; Jumped into from PLAY_SAMPLES_REALTIME
         sta     ZP_RT_TEMP11                    ;
 
-L42FF:  stx     ZP_RT_TEMP12                    ;
+PLAY_SAMPLES_REALTIME_PROCEED:
+
+        stx     ZP_RT_TEMP12                    ;
         txa                                     ;
         sec                                     ;
-        sbc     #$1E                            ;
+        sbc     #$1E                            ; A = max(0, A - 30)
         bcs     @1                              ;
         lda     #0                              ;
 @1:     tax                                     ;
-@2:     lda     D2E00,x                         ;
+@2:     lda     D2E00,x                         ; Find first entry >= 0x7f.
         cmp     #$7F                            ;
         bne     @3                              ;
         inx                                     ;
@@ -2249,7 +2257,7 @@ L42FF:  stx     ZP_RT_TEMP12                    ;
         lda     ZP_RT_TEMP8                     ;
         jmp     @3                              ;
 
-@5:     jmp     L3FFF                           ;
+@5:     jmp     PLAY_SAMPLES_REALTIME_LOOP      ;
 
 ; ----------------------------------------------------------------------------
 
