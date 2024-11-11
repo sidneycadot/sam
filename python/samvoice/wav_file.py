@@ -2,6 +2,7 @@
 
 import struct
 
+
 def write_wav_file(filename: str, samples: bytes, sample_rate: int) -> None:
     """Write 1-byte unsigned samples as a WAV file."""
 
@@ -15,9 +16,9 @@ def write_wav_file(filename: str, samples: bytes, sample_rate: int) -> None:
         bits_per_sample = 8
         size_of_data = len(samples)
 
-        wav_header  = struct.pack("<4sI4s4sIHHIIHH4sI",
-                              b"RIFF", file_size, b"WAVE", b"fmt ", 16,
-                              audio_format, num_channels, sample_rate, byte_rate,
-                              bytes_per_sample, bits_per_sample, b"data", size_of_data)
+        wav_header = struct.pack("<4sI4s4sIHHIIHH4sI",
+                                 b"RIFF", file_size, b"WAVE", b"fmt ", 16,
+                                 audio_format, num_channels, sample_rate, byte_rate,
+                                 bytes_per_sample, bits_per_sample, b"data", size_of_data)
 
         fo.write(wav_header + samples)

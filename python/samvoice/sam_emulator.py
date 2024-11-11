@@ -43,7 +43,7 @@ class SamVirtualMachine:
     * The SVM only supports the subset of 6502 opcodes needed to run SAM.
     """
 
-    #pylint: disable=too-many-instance-attributes, superfluous-parens
+    # pylint: disable=too-many-instance-attributes, superfluous-parens
 
     MEM_SIZE = 0x4651  # Last address of RAM, plus 1.
 
@@ -202,7 +202,7 @@ class SamVirtualMachine:
         # pylint: disable=too-many-statements
 
         instruction = self.read_byte(self.pc)
-        #print("@@ [{:16d}] PC {:04x} OPC {:02x} A {:02x} X {:02x} Y {:02x} Z {:d} N {:d} C {:d}".format(
+        # print("@@ [{:16d}] PC {:04x} OPC {:02x} A {:02x} X {:02x} Y {:02x} Z {:d} N {:d} C {:d}".format(
         #   self.clocks, self.pc, instruction, self.a, self.x, self.y, self.flag_z, self.flag_n, self.flag_c))
 
         match instruction:
@@ -250,7 +250,7 @@ class SamVirtualMachine:
                 self.flag_z = (operand & self.a) == 0
                 self.pc += 2
                 self.clocks += 3
-            case 0x29: #  and #imm
+            case 0x29:  # and #imm
                 operand = self.read_byte(self.pc + 1)
                 self.set_a_register(self.a & operand)
                 self.pc += 2

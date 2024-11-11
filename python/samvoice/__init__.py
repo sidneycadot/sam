@@ -6,7 +6,7 @@ toplevel "samvoice" package.
 
 # The reciter and its support functions.
 from .reciter import Reciter
-from .reciter_rewrite_rules_dictionary import  (
+from .reciter_rewrite_rules_dictionary import (
             parse_rewrite_rules_dictionary,
             read_rewrite_rules_dictionary_from_file,
             get_default_rewrite_rules_dictionary

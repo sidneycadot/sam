@@ -10,7 +10,7 @@ except ModuleNotFoundError:
     IMPORTS_OK = False
 
 
-def addfield(field, value):
+def add_field(field, value):
     """Decorate a function with a field and a value."""
     def decorate(f):
         setattr(f, field, value)
@@ -20,7 +20,7 @@ def addfield(field, value):
 
 if IMPORTS_OK:
 
-    @addfield("available", True)
+    @add_field("available", True)
     def play_sound(samples: bytes, sample_rate: float, volume_db: Optional[float] = None) -> None:
         """Play sound samples"""
         np_samples = np.frombuffer(samples, dtype=np.uint8).astype(np.float32) / 127.5 - 1.0
@@ -37,7 +37,7 @@ if IMPORTS_OK:
 
 else:
 
-    @addfield("available", False)
+    @add_field("available", False)
     def play_sound(samples: bytes, sample_rate: float, volume_db: Optional[float] = None) -> None:
         """Stub implementation that always raises an exception."""
         raise NotImplementedError()

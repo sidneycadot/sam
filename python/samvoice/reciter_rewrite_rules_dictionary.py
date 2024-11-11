@@ -10,8 +10,9 @@ from .reciter_rewrite_rule import ReciterRewriteRule
 
 type ReciterRewriteRulesDictionary = dict[Optional[str], list[ReciterRewriteRule]]
 
+
 def parse_rewrite_rules_dictionary(rule_lines: str) -> ReciterRewriteRulesDictionary:
-    """Utility class to read string file containing SAM Reciter rewrite rules and return them as a key-indexed dictionary."""
+    """Parse string file containing SAM Reciter rewrite rules and return them as a key-indexed dictionary."""
 
     # Prepare empty rules dictionary with all keys (None and A..Z), but no rules.
     rules_dictionary: ReciterRewriteRulesDictionary = {None: []}
@@ -50,7 +51,7 @@ def parse_rewrite_rules_dictionary(rule_lines: str) -> ReciterRewriteRulesDictio
             rules_dictionary[key].append(rule)
             continue
 
-        # The line is neither a key or a rule. This is a fatal error.
+        # The line is neither a key nor a rule. This is a fatal error.
         raise RuntimeError(f"Badly formatted rules dictionary line: {line!r}")
 
     return rules_dictionary

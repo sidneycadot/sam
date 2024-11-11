@@ -8,6 +8,7 @@ We use it to generate code for the 'sam_6502_code.py' that is part of the "samvo
 import gzip
 import base64
 
+
 def main():
     """Encode the "sam_2000_4650.bin" executable for inclusion as Python source code."""
 

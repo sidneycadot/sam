@@ -224,7 +224,7 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
         # Try to match a literal source character to the pattern character.
         source_character = source_scanner.peek(1)
         return (pattern_character == source_character) and \
-          match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
+            match_wildcard_pattern(pattern_scanner.drop(1), source_scanner.drop(1), fix_bugs)
 
     if pattern_character == ' ':
         source_character = source_scanner.peek(1)
@@ -324,7 +324,6 @@ def match_wildcard_pattern(pattern_scanner: StringScanner, source_scanner: Strin
 
         return False
 
-
     raise RuntimeError(f"Bad wildcard character: {pattern_character!r}")
 
 
@@ -348,11 +347,11 @@ class ReciterRewriteRule:
         This match must be verbatim; characters, including symbols, are matched literally.
 
     (2) Match the rewrite rule's 'prefix', going left from the current position in the source text.
-        The prefix can consists of the letters A-Z and a number of wildcard symbols.
+        The prefix consists of the letters A-Z and a number of wildcard symbols.
 
     (3) Match the rewrite rule's 'suffix', going right from the character following the stem in the
         source text. Note that we're sure that the stem is present in the source text, as it was
-        matched during step (1). The suffix can consists of the letters A-Z and a number of
+        matched during step (1). The suffix consists of the letters A-Z and a number of
         wildcard symbols.
 
     If all three steps indicate a match, the rule is considered to match. In that case, the rewrite

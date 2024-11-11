@@ -1,4 +1,4 @@
-"""This module is a pure Python re-implementation of the "SAM Reciter" which translates English text to SAM-style phonemes.
+"""This is a pure Python re-implementation of the "SAM Reciter" which translates English text to SAM-style phonemes.
 
 SAM is the Software Automatic Mouth, a speech synthesizer program from the 8-bit era. It was developed by Mark Barton
 and sold by Don't Ask Software starting in 1982.
@@ -15,7 +15,9 @@ class Reciter:
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, *, rules_dictionary: Optional[dict[Optional[str], list[ReciterRewriteRule]]] = None, fix_bugs: bool = False):
+    def __init__(self, *,
+                 rules_dictionary: Optional[dict[Optional[str], list[ReciterRewriteRule]]] = None,
+                 fix_bugs: bool = False):
 
         if rules_dictionary is None:
             rules_dictionary = get_default_rewrite_rules_dictionary()
