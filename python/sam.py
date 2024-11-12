@@ -26,7 +26,8 @@ def main():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--clock-frequency", default=1.79, help="6502 clock frequency, in MHz (default: 1.79 MHz)")
+    parser.add_argument("--clock-frequency", default=SamEmulator.DEFAULT_CPU_FREQUENCY / 1e6,
+                        help=f"6502 clock frequency, in MHz (default: {SamEmulator.DEFAULT_CPU_FREQUENCY/1e6} MHz)")
     parser.add_argument("--sample-rate", default=48000, help="WAV file sample rate (default: 48000 samples/s)")
     parser.add_argument("--phonemes", "-p", action="store_true", help="render phonemes directly (disable reciter)")
     parser.add_argument("--silent", "-s", action="store_true", help="do not play rendered audio samples")

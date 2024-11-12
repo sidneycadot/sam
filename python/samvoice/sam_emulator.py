@@ -553,7 +553,7 @@ class SamVirtualMachine:
 
 
 def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float) -> list[int]:
-    """Resample samples on an irregular time grid onto a periodic time grid."""
+    """Resample samples with non-periodic times onto a periodic time grid."""
     output_samples: list[int] = []
 
     if len(samples_in) != 0:
@@ -609,13 +609,25 @@ class SamPhonemeError(Exception):
 class SamEmulator:
     """The SamEmulator class encapsulates a Sam Virtual Machine and knows how to run SAM in it."""
 
+    # The number of clock cycles that a PAL Atari 6502 runs per second.
+    # The actual clock cycle behavior of the Atari 8-bit computer is complicated.
+    # The cycles where the CPU is doing work are not fully periodic, even when DMA is disabled and no interrupts are generated;
+    # this is due to memory refresh cycles during which the CPU is temporarily halted. In the end, it turns out that a full screen
+    # cycle corresponds to precisely 32760 CPU cycles (when DMA is disabled), and measurement on a real Atari shows that screens
+    # are generated at a rate of 49.860339 screens/s. Hence, the mean CPU rate comes out as 32760 * 49.860339 == 1.633425e6 CPU cycles
+    # per second.
+    DEFAULT_CPU_FREQUENCY = 1.633425e6
+
+    # The default sample rate at which to render speech.
+    DEFAULT_AUDIO_SAMPLE_FREQUENCY = 48000.0
+
     def __init__(self, sam_virtual_machine_clock_frequency: Optional[float] = None, audio_resample_rate: Optional[float] = None):
 
         if sam_virtual_machine_clock_frequency is None:
-            sam_virtual_machine_clock_frequency = 1.79e6
+            sam_virtual_machine_clock_frequency = self.DEFAULT_CPU_FREQUENCY
 
         if audio_resample_rate is None:
-            audio_resample_rate = 48000.0
+            audio_resample_rate = self.DEFAULT_AUDIO_SAMPLE_FREQUENCY
 
         self.sam_virtual_machine_clock_frequency = sam_virtual_machine_clock_frequency
         self.audio_resample_rate = audio_resample_rate
