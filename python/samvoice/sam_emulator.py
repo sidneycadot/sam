@@ -367,13 +367,13 @@ class SamVirtualMachine:
                 abs_address = base_address + self.y
                 self.write_byte(abs_address, self.a)
                 self.pc += 3
-                self.clocks += 6 if self.different_pages(base_address, abs_address) else 5  # To be confirmed.
+                self.clocks += 5  # sim65 is incorrect here. No extra cycle should be added when crossing a page boundary.
             case 0x9d:  # sta abs,x
                 base_address = self.read_word(self.pc + 1)
                 abs_address = base_address + self.x
                 self.write_byte(abs_address, self.a)
                 self.pc += 3
-                self.clocks += 6 if self.different_pages(base_address, abs_address) else 5  # To be confirmed.
+                self.clocks += 5  # sim65 is incorrect here. No extra cycle should be added when crossing a page boundary.
             case 0xa0:  # ldy #imm
                 operand = self.read_byte(self.pc + 1)
                 self.set_y_register(operand)
