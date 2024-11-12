@@ -470,7 +470,7 @@ static void svm_execute_instruction(struct sam_virtual_machine * svm)
             const u16 abs_address = base_address + svm->y;
             svm_write_byte(svm, abs_address, svm->a);
             svm->pc += 3;
-            svm->clocks += svm_different_pages(base_address, abs_address) ? 6 : 5; // To be confirmed.
+            svm->clocks += 5; // sim65 is wrong here; the instruction does not take an extra cycle on a page boundary crossing.
             break;
         }
         case 0x9d: // sta abs,x
@@ -479,7 +479,7 @@ static void svm_execute_instruction(struct sam_virtual_machine * svm)
             const u16 abs_address = base_address + svm->x;
             svm_write_byte(svm, abs_address, svm->a);
             svm->pc += 3;
-            svm->clocks += svm_different_pages(base_address, abs_address) ? 6 : 5; // To be confirmed.
+            svm->clocks += 5; // sim65 is wrong here; the instruction does not take an extra cycle on a page boundary crossing.
             break;
         }
         case 0xa0: // ldy #imm
