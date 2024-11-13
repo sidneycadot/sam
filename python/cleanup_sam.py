@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 
+import sys
 import time
 
 S = 0xff
@@ -25,17 +26,113 @@ def different_pages(u1: int, u2: int) -> bool:
     return (u1 // 0x100) != (u2 // 0x100)
 
 def read_byte(address: int) -> int:
-    assert 0 <= address <= 0xffff
-    return mem[address]
 
-def read_word(address: int) -> int:
-    return read_byte(address) + read_byte(address + 1) * 0x100
+    ok = False
+
+    if address == 0x10:
+        ok = True
+
+    if address == 0xcd:
+        ok = True
+
+    if 0x0e1 <= address <= 0xff:
+        ok = True
+
+    if address == 0x2013:
+        ok = True
+
+    if 0x2010 <= address <= 0x2012:
+        ok = True
+
+    if 0x2014 <= address <= 0x2113:
+        ok = True
+
+    if 0x2262 <= address <= 0x2361:
+        ok = True
+
+    if 0x2362 <= address <= 0x2461:
+        ok = True
+
+    if 0x2462 <= address <= 0x2561:
+        ok = True
+
+    if 0x2564 <= address <= 0x256a:
+        ok = True
+
+    if 0x256c <= address <= 0x25bc:
+        ok = True
+
+    if 0x25bd <= address <= 0x260d:
+        ok = True
+
+    if 0x260e <= address <= 0x26a9:
+        ok = True
+
+    if 0x2a50 <= address <= 0x2a6e:
+        ok = True
+
+    if 0x2b00 <= address <=  0x2bff:
+        ok = True
+
+    if 0x2c00 <= address <=  0x2cff:
+        ok = True
+
+    if 0x2d00 <= address <=  0x2dff:
+        ok = True
+
+    if 0x2e00 <= address <=  0x2eff:
+        ok = True
+
+    if 0x2f00 <= address <=  0x34ff:
+        ok = True
+
+    if 0x3500 <= address <= 0x39bf:
+        ok = True
+
+    #0x39C0 .. 0x3EBF
+    if 0x39cf <= address <= 0x3ebf:
+        ok = True
+
+    if 0x3ec0 <= address <= 0x3efb:
+        ok = True
+
+    if 0x3efc <= address <= 0x3f37:
+        ok = True
+
+    if 0x3f38 <= address <= 0x3f73:
+        ok = True
+
+    # 0x3F74 .. 0x3F83 (Gain)
+    if 0x3f74 <= address <= 0x3f83:
+        ok = True
+
+    # 0x3F84 .. 0x3F8E
+    if 0x3f85 <= address <= 0x3f87:
+        ok = True
+
+    # 0x3F84 .. 0x3F8E
+    if 0x3f88 <= address <= 0x3f8a:
+        ok = True
+
+    #0x4331 .. 0x4335
+    if 0x4331 <= address <= 0x4334:
+        ok = True
+
+    if address == 0x43a9:
+        ok = True
+
+    if not ok:
+        raise RuntimeError("Bad read address: 0x{:04x}".format(address))
+
+    return mem[address]
 
 def write_byte(address: int, value: int) -> None:
     global clocks, first_clock
     assert 0 <= address <= 0xffff
     assert 0 <= value <= 0xff
-    mem[address] = value
+
+    if address in (0xd20e, 0xd400, 0xd40e):
+        return
 
     if address == 0xd201:
         assert 0 <= value <= 31
@@ -43,6 +140,65 @@ def write_byte(address: int, value: int) -> None:
         if first_clock is None:
             first_clock = clocks
         print("## {:10d} {:3d}".format(clocks - first_clock, sample))
+        return
+
+    ok = False
+
+    if address == 0xcd:
+        ok = True
+
+    if 0xe1 <= address <= address <= 0xff:
+        ok = True
+
+    if address == 0x2013:
+        ok = True
+
+    if 0x2a50 <= address <= 0x2a6e:
+        ok = True
+
+    if 0x2262 <= address <= 0x2361:
+        ok = True
+
+    if 0x2362 <= address <= 0x2461:
+        ok = True
+
+    if 0x2462 <= address <= 0x2561:
+        ok = True
+
+    if 0x2f00 <= address <=  0x2fff:
+        ok = True
+
+    if 0x2e00 <= address <=  0x2eff:
+        ok = True
+
+    if 0x3000 <= address <=  0x35ff:
+        ok = True
+
+    if 0x3ec0 <= address <= 0x3efb:
+        ok = True
+
+    if 0x3efc <= address <= 0x3f37:
+        ok = True
+
+    if 0x3f38 <= address <= 0x3f73:
+        ok = True
+
+    if address == 0x43a9:
+        ok = True
+
+    # Self-modyfying code addresses
+    if address in (0x403f, 0x4210, 0x421f, 0x42b0, 0x42df):
+        ok = True
+
+    if not ok:
+        raise RuntimeError("Bad write address: 0x{:04x}".format(address))
+
+    mem[address] = value
+
+
+def read_word(address: int) -> int:
+    return read_byte(address) + read_byte(address + 1) * 0x100
+
 
 def push_byte(value: int) -> None:
     """Push a single byte onto the 6502 stack."""
@@ -119,6 +275,10 @@ def add_with_carry(value: int) -> None:
     set_a_register(temp & 0xff)
     C = (temp & 0x100) != 0
 
+def report_cpu_state():
+    global A, X, Y, Z, N, C, S, PC, clocks
+    print("@@ [{:16d}] PC {:04x} OPC {:02x} A {:02x} X {:02x} Y {:02x} Z {:d} N {:d} C {:d}".format(clocks, PC, mem[PC], A, X, Y, Z, N, C))
+
 def sam():
     global A, X, Y, Z, N, C, S, PC, clocks
     A = 0
@@ -131,65 +291,41 @@ def sam():
     PC = 0x2004
     clocks = 0
     push_word(0xffff)
+
     while PC != 0:
-        print("@@ [{:16d}] PC {:04x} OPC {:02x} A {:02x} X {:02x} Y {:02x} Z {:d} N {:d} C {:d}".format(clocks, PC, mem[PC], A, X, Y, Z, N, C))
+
+        report_cpu_state()
+
         match PC:
-            case 0x2000:
-                # 2000: 0x68        PLA
-                raise NotImplementedError("Opcode 0x68 not implemented.")
-            case 0x2001:
-                # 2001: 4C 14 21    JMP $2114
-                PC = 0x2114
-                clocks += 3
+
+            # ------------------------------ Machine language entry point.
+
+            # 2004: 4C 1C 21    JMP $211C
+
             case 0x2004:
-                # 2004: 4C 1C 21    JMP $211C
                 PC = 0x211c
                 clocks += 3
-            case 0x2007:
-                # 2007: 0x68        PLA
-                raise NotImplementedError("Opcode 0x68 not implemented.")
-            case 0x2008:
-                # 2008: 4C 08 47    JMP $4708
-                PC = 0x4708
-                clocks += 3
-            case 0x200b:
-                # 200B: 4C 0B 47    JMP $470B
-                PC = 0x470b
-                clocks += 3
-            case 0x2114:
-                # 2114: 20 B7 21    JSR $21B7
-                push_word(PC + 2)
-                PC = 0x21b7
-                clocks += 6
-            case 0x2117:
-                # 2117: A5 CB       LDA $CB
-                operand = read_byte(0xcb)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x2119:
-                # 2119: F0 01       BEQ $211C
-                if Z:
-                    PC = 0x211c
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x211b:
-                # 211B: 0x60        RTS
-                PC = (pop_word() + 1) & 0xffff
-                clocks += 6
+
+            # ------------------------------ RUN_SAM_FROM_MACHINE_LANGUAGE
+
+            # 211C: 20 C0 3F    JSR $3FC0
+
             case 0x211c:
-                # 211C: 20 C0 3F    JSR $3FC0
+
                 push_word(PC + 2)
                 PC = 0x3fc0
                 clocks += 6
+
+            # ------------------------------ SAM_SAY_PHONEMES
+
             case 0x211f:
                 # 211F: A9 FF       LDA #$FF
                 set_a_register(0xff)
                 PC += 2
                 clocks += 2
-            case 0x2121:
+
+                report_cpu_state()
+
                 # 2121: 8D 13 20    STA $2013
                 write_byte(0x2013, A)
                 PC += 3
@@ -511,582 +647,71 @@ def sam():
                 # 21B6: 0x60        RTS
                 PC = (pop_word() + 1) & 0xffff
                 clocks += 6
-            case 0x21b7:
-                # 21B7: A9 00       LDA #$00
-                set_a_register(0x00)
-                PC += 2
-                clocks += 2
-            case 0x21b9:
-                # 21B9: 85 CB       STA $CB
-                write_byte(0x00cb, A)
-                PC += 2
-                clocks += 3
-            case 0x21bb:
-                # 21BB: 85 CC       STA $CC
-                write_byte(0x00cc, A)
-                PC += 2
-                clocks += 3
-            case 0x21bd:
-                # 21BD: 85 CD       STA $CD
-                write_byte(0x00cd, A)
-                PC += 2
-                clocks += 3
-            case 0x21bf:
-                # 21BF: A5 82       LDA $82
-                operand = read_byte(0x82)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x21c1:
-                # 21C1: 85 CE       STA $CE
-                write_byte(0x00ce, A)
-                PC += 2
-                clocks += 3
-            case 0x21c3:
-                # 21C3: A5 83       LDA $83
-                operand = read_byte(0x83)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x21c5:
-                # 21C5: 85 CF       STA $CF
-                write_byte(0x00cf, A)
-                PC += 2
-                clocks += 3
-            case 0x21c7:
-                # 21C7: A5 8C       LDA $8C
-                operand = read_byte(0x8c)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x21c9:
-                # 21C9: 85 D0       STA $D0
-                write_byte(0x00d0, A)
-                PC += 2
-                clocks += 3
-            case 0x21cb:
-                # 21CB: A5 8D       LDA $8D
-                operand = read_byte(0x8d)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x21cd:
-                # 21CD: 85 D1       STA $D1
-                write_byte(0x00d1, A)
-                PC += 2
-                clocks += 3
-            case 0x21cf:
-                # 21CF: A0 00       LDY #$00
-                set_y_register(0x00)
-                PC += 2
-                clocks += 2
-            case 0x21d1:
-                # 21D1: B1 CE       LDA ($CE),y
-                assert 0x00ce < 0xff
-                base_address = read_word(0x00ce)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x21d3:
-                # 21D3: C9 53       CMP #$53
-                compare(A, 0x53)
-                PC += 2
-                clocks += 2
-            case 0x21d5:
-                # 21D5: D0 18       BNE $21EF
-                if not Z:
-                    PC = 0x21ef
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x21d7:
-                # 21D7: 0xC8        INY
-                set_y_register((Y + 1) & 0xff)
-                PC += 1
-                clocks += 2
-            case 0x21d8:
-                # 21D8: B1 CE       LDA ($CE),y
-                assert 0x00ce < 0xff
-                base_address = read_word(0x00ce)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x21da:
-                # 21DA: C9 41       CMP #$41
-                compare(A, 0x41)
-                PC += 2
-                clocks += 2
-            case 0x21dc:
-                # 21DC: D0 11       BNE $21EF
-                if not Z:
-                    PC = 0x21ef
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x21de:
-                # 21DE: 0xC8        INY
-                set_y_register((Y + 1) & 0xff)
-                PC += 1
-                clocks += 2
-            case 0x21df:
-                # 21DF: B1 CE       LDA ($CE),y
-                assert 0x00ce < 0xff
-                base_address = read_word(0x00ce)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x21e1:
-                # 21E1: C9 4D       CMP #$4D
-                compare(A, 0x4d)
-                PC += 2
-                clocks += 2
-            case 0x21e3:
-                # 21E3: D0 0A       BNE $21EF
-                if not Z:
-                    PC = 0x21ef
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x21e5:
-                # 21E5: 0xC8        INY
-                set_y_register((Y + 1) & 0xff)
-                PC += 1
-                clocks += 2
-            case 0x21e6:
-                # 21E6: B1 CE       LDA ($CE),y
-                assert 0x00ce < 0xff
-                base_address = read_word(0x00ce)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x21e8:
-                # 21E8: C9 A4       CMP #$A4
-                compare(A, 0xa4)
-                PC += 2
-                clocks += 2
-            case 0x21ea:
-                # 21EA: D0 03       BNE $21EF
-                if not Z:
-                    PC = 0x21ef
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x21ec:
-                # 21EC: 4C 0C 22    JMP $220C
-                PC = 0x220c
-                clocks += 3
-            case 0x21ef:
-                # 21EF: A5 CE       LDA $CE
-                operand = read_byte(0xce)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x21f1:
-                # 21F1: C5 84       CMP $84
-                operand = read_byte(0x84)
-                compare(A, operand)
-                PC += 2
-                clocks += 3
-            case 0x21f3:
-                # 21F3: D0 06       BNE $21FB
-                if not Z:
-                    PC = 0x21fb
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x21f5:
-                # 21F5: A5 CF       LDA $CF
-                operand = read_byte(0xcf)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x21f7:
-                # 21F7: C5 85       CMP $85
-                operand = read_byte(0x85)
-                compare(A, operand)
-                PC += 2
-                clocks += 3
-            case 0x21f9:
-                # 21F9: F0 5F       BEQ $225A
-                if Z:
-                    PC = 0x225a
-                    clocks += 4
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x21fb:
-                # 21FB: A0 00       LDY #$00
-                set_y_register(0x00)
-                PC += 2
-                clocks += 2
-            case 0x21fd:
-                # 21FD: B1 CE       LDA ($CE),y
-                assert 0x00ce < 0xff
-                base_address = read_word(0x00ce)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x21ff:
-                # 21FF: 10 02       BPL $2203
-                if not N:
-                    PC = 0x2203
-                    clocks += 4
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x2201:
-                # 2201: E6 CB       INC $CB
-                operand = read_byte(0xcb)
-                value = (operand + 1) & 0xff
-                write_byte(0xcb, value)
-                update_nz_flags(value)
-                PC += 2
-                clocks += 5
-            case 0x2203:
-                # 2203: E6 CE       INC $CE
-                operand = read_byte(0xce)
-                value = (operand + 1) & 0xff
-                write_byte(0xce, value)
-                update_nz_flags(value)
-                PC += 2
-                clocks += 5
-            case 0x2205:
-                # 2205: D0 02       BNE $2209
-                if not Z:
-                    PC = 0x2209
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x2207:
-                # 2207: E6 CF       INC $CF
-                operand = read_byte(0xcf)
-                value = (operand + 1) & 0xff
-                write_byte(0xcf, value)
-                update_nz_flags(value)
-                PC += 2
-                clocks += 5
-            case 0x2209:
-                # 2209: 4C CF 21    JMP $21CF
-                PC = 0x21cf
-                clocks += 3
-            case 0x220c:
-                # 220C: 0x18        CLC
-                C = False
-                PC += 1
-                clocks += 2
-            case 0x220d:
-                # 220D: 06 CB       ASL $CB
-                operand = read_byte(0xcb)
-                value = (operand << 1) & 0xff
-                write_byte(0xcb, value)
-                update_nz_flags(value)
-                C = (operand & 0x80) != 0
-                PC += 2
-                clocks += 5
-            case 0x220f:
-                # 220F: 26 CC       ROL $CC
-                raise NotImplementedError("Opcode 0x26 not implemented.")
-            case 0x2211:
-                # 2211: 06 CB       ASL $CB
-                operand = read_byte(0xcb)
-                value = (operand << 1) & 0xff
-                write_byte(0xcb, value)
-                update_nz_flags(value)
-                C = (operand & 0x80) != 0
-                PC += 2
-                clocks += 5
-            case 0x2213:
-                # 2213: 26 CC       ROL $CC
-                raise NotImplementedError("Opcode 0x26 not implemented.")
-            case 0x2215:
-                # 2215: 06 CB       ASL $CB
-                operand = read_byte(0xcb)
-                value = (operand << 1) & 0xff
-                write_byte(0xcb, value)
-                update_nz_flags(value)
-                C = (operand & 0x80) != 0
-                PC += 2
-                clocks += 5
-            case 0x2217:
-                # 2217: 26 CC       ROL $CC
-                raise NotImplementedError("Opcode 0x26 not implemented.")
-            case 0x2219:
-                # 2219: 0x18        CLC
-                C = False
-                PC += 1
-                clocks += 2
-            case 0x221a:
-                # 221A: A5 CB       LDA $CB
-                operand = read_byte(0xcb)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x221c:
-                # 221C: 65 86       ADC $86
-                operand = read_byte(0x86)
-                add_with_carry(operand)
-                PC += 2
-                clocks += 3
-            case 0x221e:
-                # 221E: 85 CB       STA $CB
-                write_byte(0x00cb, A)
-                PC += 2
-                clocks += 3
-            case 0x2220:
-                # 2220: A5 CC       LDA $CC
-                operand = read_byte(0xcc)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x2222:
-                # 2222: 65 87       ADC $87
-                operand = read_byte(0x87)
-                add_with_carry(operand)
-                PC += 2
-                clocks += 3
-            case 0x2224:
-                # 2224: 85 CC       STA $CC
-                write_byte(0x00cc, A)
-                PC += 2
-                clocks += 3
-            case 0x2226:
-                # 2226: A0 05       LDY #$05
-                set_y_register(0x05)
-                PC += 2
-                clocks += 2
-            case 0x2228:
-                # 2228: B1 CB       LDA ($CB),y
-                assert 0x00cb < 0xff
-                base_address = read_word(0x00cb)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x222a:
-                # 222A: D0 2E       BNE $225A
-                if not Z:
-                    PC = 0x225a
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x222c:
-                # 222C: 0x88        DEY
-                set_y_register((Y - 1) & 0xff)
-                PC += 1
-                clocks += 2
-            case 0x222d:
-                # 222D: B1 CB       LDA ($CB),y
-                assert 0x00cb < 0xff
-                base_address = read_word(0x00cb)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x222f:
-                # 222F: 85 CD       STA $CD
-                write_byte(0x00cd, A)
-                PC += 2
-                clocks += 3
-            case 0x2231:
-                # 2231: A0 02       LDY #$02
-                set_y_register(0x02)
-                PC += 2
-                clocks += 2
-            case 0x2233:
-                # 2233: B1 CB       LDA ($CB),y
-                assert 0x00cb < 0xff
-                base_address = read_word(0x00cb)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x2235:
-                # 2235: 0x18        CLC
-                C = False
-                PC += 1
-                clocks += 2
-            case 0x2236:
-                # 2236: 65 D0       ADC $D0
-                operand = read_byte(0xd0)
-                add_with_carry(operand)
-                PC += 2
-                clocks += 3
-            case 0x2238:
-                # 2238: 85 D0       STA $D0
-                write_byte(0x00d0, A)
-                PC += 2
-                clocks += 3
-            case 0x223a:
-                # 223A: A0 03       LDY #$03
-                set_y_register(0x03)
-                PC += 2
-                clocks += 2
-            case 0x223c:
-                # 223C: B1 CB       LDA ($CB),y
-                assert 0x00cb < 0xff
-                base_address = read_word(0x00cb)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x223e:
-                # 223E: 65 D1       ADC $D1
-                operand = read_byte(0xd1)
-                add_with_carry(operand)
-                PC += 2
-                clocks += 3
-            case 0x2240:
-                # 2240: 85 D1       STA $D1
-                write_byte(0x00d1, A)
-                PC += 2
-                clocks += 3
-            case 0x2242:
-                # 2242: A0 00       LDY #$00
-                set_y_register(0x00)
-                PC += 2
-                clocks += 2
-            case 0x2244:
-                # 2244: B1 D0       LDA ($D0),y
-                assert 0x00d0 < 0xff
-                base_address = read_word(0x00d0)
-                abs_address = base_address + Y
-                operand = read_byte(abs_address)
-                set_a_register(operand)
-                PC += 2
-                clocks += 6 if different_pages(abs_address, base_address) else 5
-            case 0x2246:
-                # 2246: 99 14 20    STA $2014,y
-                abs_address = 0x2014 + Y
-                write_byte(abs_address, A)
-                PC += 3
-                clocks += 5  # sim65 is incorrect here. No extra cycle should be added when crossing a page boundary.
-            case 0x2249:
-                # 2249: 0xC8        INY
-                set_y_register((Y + 1) & 0xff)
-                PC += 1
-                clocks += 2
-            case 0x224a:
-                # 224A: C4 CD       CMP $CD
-                raise NotImplementedError("Opcode 0xc4 not implemented.")
-            case 0x224c:
-                # 224C: D0 F6       BNE $2244
-                if not Z:
-                    PC = 0x2244
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x224e:
-                # 224E: A9 9B       LDA #$9B
-                set_a_register(0x9b)
-                PC += 2
-                clocks += 2
-            case 0x2250:
-                # 2250: 99 14 20    STA $2014,y
-                abs_address = 0x2014 + Y
-                write_byte(abs_address, A)
-                PC += 3
-                clocks += 5  # sim65 is incorrect here. No extra cycle should be added when crossing a page boundary.
-            case 0x2253:
-                # 2253: A9 00       LDA #$00
-                set_a_register(0x00)
-                PC += 2
-                clocks += 2
-            case 0x2255:
-                # 2255: 85 CB       STA $CB
-                write_byte(0x00cb, A)
-                PC += 2
-                clocks += 3
-            case 0x2257:
-                # 2257: 85 CD       STA $CD
-                write_byte(0x00cd, A)
-                PC += 2
-                clocks += 3
-            case 0x2259:
-                # 2259: 0x60        RTS
-                PC = (pop_word() + 1) & 0xffff
-                clocks += 6
-            case 0x225a:
-                # 225A: 20 2D 45    JSR $452D
-                push_word(PC + 2)
-                PC = 0x452d
-                clocks += 6
-            case 0x225d:
-                # 225D: A9 01       LDA #$01
-                set_a_register(0x01)
-                PC += 2
-                clocks += 2
-            case 0x225f:
-                # 225F: 85 CB       STA $CB
-                write_byte(0x00cb, A)
-                PC += 2
-                clocks += 3
-            case 0x2261:
-                # 2261: 0x60        RTS
-                PC = (pop_word() + 1) & 0xffff
-                clocks += 6
-            case 0x26aa:
+
+            # ------------------------------ SUB_SAVE_AXY
+
                 # 26AA: 85 FC       STA $FC
+                # 26AC: 86 FB       STX $FB
+                # 26AE: 84 FA       STY $FA
+                # 26B0: 0x60        RTS
+
+            case 0x26aa:
+
                 write_byte(0x00fc, A)
                 PC += 2
                 clocks += 3
-            case 0x26ac:
-                # 26AC: 86 FB       STX $FB
+
+                report_cpu_state()
+
                 write_byte(0x00fb, X)
                 PC += 2
                 clocks += 3
-            case 0x26ae:
-                # 26AE: 84 FA       STY $FA
+
+                report_cpu_state()
+
                 write_byte(0x00fa, Y)
                 PC += 2
                 clocks += 3
-            case 0x26b0:
-                # 26B0: 0x60        RTS
+
+                report_cpu_state()
+
                 PC = (pop_word() + 1) & 0xffff
                 clocks += 6
-            case 0x26b1:
+
+            # ------------------------------ SUB_RESTORE_AXY
+
                 # 26B1: A5 FC       LDA $FC
+                # 26B3: A6 FB       LDX $FB
+                # 26B5: A4 FA       LDY $FA
+                # 26B7: 0x60        RTS
+
+            case 0x26b1:
                 operand = read_byte(0xfc)
                 set_a_register(operand)
                 PC += 2
                 clocks += 3
-            case 0x26b3:
-                # 26B3: A6 FB       LDX $FB
+
+                report_cpu_state()
+
                 operand = read_byte(0xfb)
                 set_x_register(operand)
                 PC += 2
                 clocks += 3
-            case 0x26b5:
-                # 26B5: A4 FA       LDY $FA
+
+                report_cpu_state()
+
                 operand = read_byte(0xfa)
                 set_y_register(operand)
                 PC += 2
                 clocks += 3
-            case 0x26b7:
-                # 26B7: 0x60        RTS
+
+                report_cpu_state()
+
                 PC = (pop_word() + 1) & 0xffff
                 clocks += 6
+
+            # ------------------------------ INSERT_PHONEME
+
             case 0x26b8:
                 # 26B8: 20 AA 26    JSR $26AA
                 push_word(PC + 2)
@@ -1213,43 +838,60 @@ def sam():
                 # 26E9: 0x60        RTS
                 PC = (pop_word() + 1) & 0xffff
                 clocks += 6
+
+            # ------------------------------ PREP_1_PARSE_ASCII_PHONEMES
+
             case 0x26ea:
                 # 26EA: A2 00       LDX #$00
                 set_x_register(0x00)
                 PC += 2
                 clocks += 2
-            case 0x26ec:
+
+                report_cpu_state()
+
                 # 26EC: 0x8A        TXA
                 set_a_register(X)
                 PC += 1
                 clocks += 2
-            case 0x26ed:
+
+                report_cpu_state()
+
                 # 26ED: 0xA8        TAY
                 set_y_register(A)
                 PC += 1
                 clocks += 2
-            case 0x26ee:
+
+                report_cpu_state()
+
                 # 26EE: 85 FF       STA $FF
                 write_byte(0x00ff, A)
                 PC += 2
                 clocks += 3
+
             case 0x26f0:
+
                 # 26F0: 99 62 24    STA $2462,y
                 abs_address = 0x2462 + Y
                 write_byte(abs_address, A)
                 PC += 3
                 clocks += 5  # sim65 is incorrect here. No extra cycle should be added when crossing a page boundary.
-            case 0x26f3:
+
+                report_cpu_state()
+
                 # 26F3: 0xC8        INY
                 set_y_register((Y + 1) & 0xff)
                 PC += 1
                 clocks += 2
-            case 0x26f4:
+
+                report_cpu_state()
+
                 # 26F4: C0 FF       CPY #$FF
                 compare(Y, 0xff)
                 PC += 2
                 clocks += 2
-            case 0x26f6:
+
+                report_cpu_state()
+
                 # 26F6: D0 F8       BNE $26F0
                 if not Z:
                     PC = 0x26f0
@@ -1257,6 +899,7 @@ def sam():
                 else:
                     PC += 2
                     clocks += 2
+
             case 0x26f8:
                 # 26F8: BD 14 20    LDA $2014,x
                 abs_address = 0x2014 + X
@@ -3838,6 +3481,9 @@ def sam():
                 # 3FBF: 0x60        RTS
                 PC = (pop_word() + 1) & 0xffff
                 clocks += 6
+
+            # ------------------------------ SAM_SAVE_ZP_ADDRESSES
+
             case 0x3fc0:
                 # 3FC0: A2 1F       LDX #$1F
                 set_x_register(0x1f)
@@ -3874,6 +3520,9 @@ def sam():
                 # 3FCA: 0x60        RTS
                 PC = (pop_word() + 1) & 0xffff
                 clocks += 6
+
+            # ------------------------------ SAM_RESTORE_ZP_ADDRESSES
+
             case 0x3fcb:
                 # 3FCB: A2 1F       LDX #$1F
                 set_x_register(0x1f)
@@ -3911,6 +3560,8 @@ def sam():
                 # 3FD5: 0x60        RTS
                 PC = (pop_word() + 1) & 0xffff
                 clocks += 6
+
+            # ------------------------------ PLAY_SAMPLES_REALTIME
             case 0x3fd6:
                 # 3FD6: AD C0 3E    LDA $3EC0
                 operand = read_byte(0x3ec0)
@@ -7876,165 +7527,14 @@ def sam():
                 # 452A: 4C 44 44    JMP $4444
                 PC = 0x4444
                 clocks += 3
+
+            # ------------------------------ SAM_ERROR_SOUND.
+
             case 0x452d:
-                # 452D: A9 02       LDA #$02
-                set_a_register(0x02)
-                PC += 2
-                clocks += 2
-            case 0x452f:
-                # 452F: 85 CC       STA $CC
-                write_byte(0x00cc, A)
-                PC += 2
-                clocks += 3
-            case 0x4531:
-                # 4531: A5 14       LDA $14
-                operand = read_byte(0x14)
-                set_a_register(operand)
-                PC += 2
-                clocks += 3
-            case 0x4533:
-                # 4533: 0x18        CLC
-                C = False
-                PC += 1
-                clocks += 2
-            case 0x4534:
-                # 4534: 69 08       ADC #$08
-                add_with_carry(0x08)
-                PC += 2
-                clocks += 2
-            case 0x4536:
-                # 4536: 0xAA        TAX
-                set_x_register(A)
-                PC += 1
-                clocks += 2
-            case 0x4537:
-                # 4537: A9 FF       LDA #$FF
-                set_a_register(0xff)
-                PC += 2
-                clocks += 2
-            case 0x4539:
-                # 4539: 8D 1F D0    STA $D01F
-                write_byte(0xd01f, A)
-                PC += 3
-                clocks += 4
-            case 0x453c:
-                # 453C: A9 00       LDA #$00
-                set_a_register(0x00)
-                PC += 2
-                clocks += 2
-            case 0x453e:
-                # 453E: A0 F0       LDY #$F0
-                set_y_register(0xf0)
-                PC += 2
-                clocks += 2
-            case 0x4540:
-                # 4540: 0x88        DEY
-                set_y_register((Y - 1) & 0xff)
-                PC += 1
-                clocks += 2
-            case 0x4541:
-                # 4541: D0 FD       BNE $4540
-                if not Z:
-                    PC = 0x4540
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x4543:
-                # 4543: 8D 1F D0    STA $D01F
-                write_byte(0xd01f, A)
-                PC += 3
-                clocks += 4
-            case 0x4546:
-                # 4546: A0 F0       LDY #$F0
-                set_y_register(0xf0)
-                PC += 2
-                clocks += 2
-            case 0x4548:
-                # 4548: 0x88        DEY
-                set_y_register((Y - 1) & 0xff)
-                PC += 1
-                clocks += 2
-            case 0x4549:
-                # 4549: D0 FD       BNE $4548
-                if not Z:
-                    PC = 0x4548
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x454b:
-                # 454B: E4 14       CPX $14
-                operand = read_byte(0x14)
-                compare(X, operand)
-                PC += 2
-                clocks += 3
-            case 0x454d:
-                # 454D: D0 E8       BNE $4537
-                if not Z:
-                    PC = 0x4537
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x454f:
-                # 454F: C6 CC       DEC $CC
-                operand = read_byte(0xcc)
-                value = (operand - 1) & 0xff
-                write_byte(0xcc, value)
-                update_nz_flags(value)
-                PC += 2
-                clocks += 5
-            case 0x4551:
-                # 4551: F0 0C       BEQ $455F
-                if Z:
-                    PC = 0x455f
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x4553:
-                # 4553: 0x8A        TXA
-                set_a_register(X)
-                PC += 1
-                clocks += 2
-            case 0x4554:
-                # 4554: 0x18        CLC
-                C = False
-                PC += 1
-                clocks += 2
-            case 0x4555:
-                # 4555: 69 05       ADC #$05
-                add_with_carry(0x05)
-                PC += 2
-                clocks += 2
-            case 0x4557:
-                # 4557: 0xAA        TAX
-                set_x_register(A)
-                PC += 1
-                clocks += 2
-            case 0x4558:
-                # 4558: E4 14       CPX $14
-                operand = read_byte(0x14)
-                compare(X, operand)
-                PC += 2
-                clocks += 3
-            case 0x455a:
-                # 455A: D0 FC       BNE $4558
-                if not Z:
-                    PC = 0x4558
-                    clocks += 3
-                else:
-                    PC += 2
-                    clocks += 2
-            case 0x455c:
-                # 455C: 4C 31 45    JMP $4531
-                PC = 0x4531
-                clocks += 3
-            case 0x455f:
-                # 455F: 0x60        RTS
-                PC = (pop_word() + 1) & 0xffff
-                clocks += 6
+
+                raise RuntimeError("SAM_ERROR_SOUND")
+
+            # ------------------------------
             case _:
                 raise RuntimeError("Bad address.")
 
@@ -8042,8 +7542,8 @@ def main():
     t1 = time.time()
     sam()
     t2 = time.time()
-    print("total clocks:", clocks)
-    print("runtime:", t2 - t1)
+    print("total clocks:", clocks, file=sys.stderr)
+    print("runtime:", t2 - t1, file=sys.stderr)
 
 if __name__ == "__main__":
     main()
