@@ -5807,7 +5807,7 @@ def sam():
                 set_a_register(0xff)
                 PC += 2
                 clocks += 2
-
+            case 0x42fd:
                 # 42FD: 85 ED       STA $ED
                 write_byte(0xed, A)
                 PC += 2
@@ -5817,17 +5817,17 @@ def sam():
                 write_byte(0xee, X)
                 PC += 2
                 clocks += 3
-
+            case 0x4301:
                 # 4301: 0x8A        TXA
                 set_a_register(X)
                 PC += 1
                 clocks += 2
-
+            case 0x4302:
                 # 4302: 0x38        SEC
                 C = True
                 PC += 1
                 clocks += 2
-
+            case 0x4303:
                 # 4303: E9 1E       SBC #$1E
                 subtract_with_borrow(0x1e)
                 PC += 2
@@ -5853,10 +5853,11 @@ def sam():
 
                 # 430A: BD 00 2E    LDA $2E00,x
                 abs_address = 0x2e00 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
-                clocks += 54
+                clocks += 5 if different_pages(abs_address, 0x2e00) else 4
 
                 # 430D: C9 7F       CMP #$7F
                 compare(A, 0x7f)
@@ -5923,6 +5924,7 @@ def sam():
             case 0x4322:
                 # 4322: BD 00 2E    LDA $2E00,x
                 abs_address = 0x2e00 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -5995,6 +5997,7 @@ def sam():
             case 0x4341:
                 # 4341: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -6030,6 +6033,7 @@ def sam():
             case 0x434c:
                 # 434C: 7D 62 23    ADC $2362,x
                 abs_address = 0x2362 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 add_with_carry(operand)
                 PC += 3
@@ -6059,6 +6063,7 @@ def sam():
             case 0x4358:
                 # 4358: B9 5C 26    LDA $265C,y
                 abs_address = 0x265c + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6223,9 +6228,7 @@ def sam():
                 write_byte(0x00f9, A)
                 PC += 2
                 clocks += 3
-
             case 0x4399:
-
                 # 4399: A9 00       LDA #$00
                 set_a_register(0x00)
                 PC += 2
@@ -6281,6 +6284,7 @@ def sam():
             case 0x43ae:
                 # 43AE: BD 62 22    LDA $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6403,6 +6407,7 @@ def sam():
             case 0x43e1:
                 # 43E1: BD 62 23    LDA $2362,x
                 abs_address = 0x2362 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6416,6 +6421,7 @@ def sam():
 
                 # 43E7: BD 62 24    LDA $2462,x
                 abs_address = 0x2462 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6454,6 +6460,7 @@ def sam():
             case 0x43f4:
                 # 43F4: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -6478,6 +6485,7 @@ def sam():
             case 0x43fe:
                 # 43FE: B9 5C 26    LDA $265C,y
                 abs_address = 0x265c + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6525,6 +6533,7 @@ def sam():
             case 0x440e:
                 # 440E: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -6532,6 +6541,7 @@ def sam():
             case 0x4411:
                 # 4411: B9 0E 26    LDA $260E,y
                 abs_address = 0x260e + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6552,6 +6562,7 @@ def sam():
             case 0x4418:
                 # 4418: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -6559,6 +6570,7 @@ def sam():
 
                 # 441B: B9 5C 26    LDA $265C,y
                 abs_address = 0x265c + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6579,6 +6591,7 @@ def sam():
             case 0x4422:
                 # 4422: B9 0E 26    LDA $260E,y
                 abs_address = 0x260e + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6599,6 +6612,7 @@ def sam():
             case 0x4429:
                 # 4429: BD 62 23    LDA $2362,x
                 abs_address = 0x2362 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6683,6 +6697,7 @@ def sam():
             case 0x4446:
                 # 4446: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -6707,6 +6722,7 @@ def sam():
             case 0x444e:
                 # 444E: B9 0E 26    LDA $260E,y
                 abs_address = 0x260e + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6736,6 +6752,7 @@ def sam():
             case 0x4459:
                 # 4459: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -6743,6 +6760,7 @@ def sam():
             case 0x445c:
                 # 445C: B9 0E 26    LDA $260E,y
                 abs_address = 0x260e + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6792,6 +6810,7 @@ def sam():
             case 0x446c:
                 # 446C: BD 62 23    LDA $2362,x
                 abs_address = 0x2362 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6866,6 +6885,7 @@ def sam():
             case 0x4485:
                 # 4485: BD 62 23    LDA $2362,x
                 abs_address = 0x2362 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6962,6 +6982,7 @@ def sam():
             case 0x44a4:
                 # 44A4: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -6969,6 +6990,7 @@ def sam():
             case 0x44a7:
                 # 44A7: B9 0E 26    LDA $260E,y
                 abs_address = 0x260e + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -6995,6 +7017,7 @@ def sam():
             case 0x44b0:
                 # 44B0: BD 62 23    LDA $2362,x
                 abs_address = 0x2362 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -7022,6 +7045,7 @@ def sam():
             case 0x44bc:
                 # 44BC: B9 5C 26    LDA $265C,y
                 abs_address = 0x265c + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -7047,6 +7071,7 @@ def sam():
             case 0x44c4:
                 # 44C4: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -7054,6 +7079,7 @@ def sam():
             case 0x44c7:
                 # 44C7: B9 0E 26    LDA $260E,y
                 abs_address = 0x260e + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -7109,6 +7135,7 @@ def sam():
             case 0x44df:
                 # 44DF: B9 0E 26    LDA $260E,y
                 abs_address = 0x260e + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -7134,6 +7161,7 @@ def sam():
             case 0x44e7:
                 # 44E7: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -7149,6 +7177,7 @@ def sam():
             case 0x44ec:
                 # 44EC: B9 0E 26    LDA $260E,y
                 abs_address = 0x260e + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -7169,6 +7198,7 @@ def sam():
             case 0x44f3:
                 # 44F3: BD 62 23    LDA $2362,x
                 abs_address = 0x2362 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -7204,6 +7234,7 @@ def sam():
             case 0x44ff:
                 # 44FF: BD 62 23    LDA $2362,x
                 abs_address = 0x2362 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -7237,6 +7268,7 @@ def sam():
             case 0x450c:
                 # 450C: B9 5C 26    LDA $265C,y
                 abs_address = 0x265c + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -7262,6 +7294,7 @@ def sam():
 
                 # 4514: BC 62 22    LDY $2262,x
                 abs_address = 0x2262 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_y_register(operand)
                 PC += 3
@@ -7269,6 +7302,7 @@ def sam():
 
                 # 4517: B9 0E 26    LDA $260E,y
                 abs_address = 0x260e + Y
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
@@ -7294,6 +7328,7 @@ def sam():
 
                 # 451F: BD 62 23    LDA $2362,x
                 abs_address = 0x2362 + X
+                assert abs_address <= 0xffff
                 operand = read_byte(abs_address)
                 set_a_register(operand)
                 PC += 3
