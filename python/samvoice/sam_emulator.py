@@ -8,18 +8,16 @@ The 6502 code processes SAM-style phonemes (represented as ASCII text) and rende
 sound, by writing data to the 4-bit DAC of the first of the Atari's four audio channels.
 
 A significant complication is that the 6502 code does not write DAC samples at a fixed
-rate which is the way that modern hardware processes sample data.
+rate. The rate at which samples are written to the DAC differs per phoneme, and even within
+a phoneme the time intervals between successive samples are not constant.
 
-The rate at which samples are written to the DAC differs per phoneme, and even within a
-phoneme the time intervals between successive samples are not constant.
-
-To exactly reproduce SAM's behavior, we are therefore forced to effectively emulate the
-6502 code, and to keep a precise clock count of the 6502 instructions emulated. When samples
+To exactly reproduce SAM's behavior, we are forced to effectively emulate the 6502 code,
+and to keep a precise clock count for each of the 6502 instructions emulated. When samples
 are written to the DAC (the low four bits of address 0xd201, on the Atari), we then know
 precisely the time at which this happens, expressed in clock cycles since the first
 instruction (at address 0x2004 in SAM).
 
-In this way, the process of rendering SAM phonemes yields a list of (clock, sample) tuples.
+The process of rendering SAM phonemes thus yields a list of (clock, sample) tuples.
 
 In post-processing, we re-sample these to a constant-frequency sample grid, so we end up with
 a list of samples at regular intervals. Those samples can be then written to a WAV file,
@@ -45,7 +43,7 @@ class SamVirtualMachine:
 
     # pylint: disable=too-many-instance-attributes, superfluous-parens
 
-    MEM_SIZE = 0x4651  # Last address of RAM, plus 1.
+    MEM_SIZE = 0x4651  # Last address of RAM used, plus 1.
 
     def __init__(self):
         self.clocks = 0
@@ -72,7 +70,7 @@ class SamVirtualMachine:
         self.audio_samples = []
 
     def process_audio_sample(self, sample: int) -> None:
-        """Process an incoming DAC sample, at a given moment in time."""
+        """Process an incoming DAC sample."""
         assert 0 <= sample <= 15
         self.audio_samples.append((self.clocks, sample))
         # print("## {:10d} {:3d}".format(clock - self.audio_samples[0][0], sample))
@@ -97,7 +95,7 @@ class SamVirtualMachine:
             # is used by SAM when making a noise to indicate
             # a phoneme parsing error. The code requires that
             # this value is increasing to return.
-            return (self.clocks // 30000) % 256
+            return (self.clocks // 32760) % 256
         assert address < self.MEM_SIZE
         return self.mem[address]
 
@@ -151,7 +149,7 @@ class SamVirtualMachine:
             # branch taken.
             displacement = self.read_byte(self.pc + 1)
             target = self.pc + 2 + displacement - (0x100 if (displacement & 0x80) else 0)
-            self.clocks += 4 if self.different_pages(target, self.pc) else 3
+            self.clocks += 4 if self.different_pages(target, self.pc + 2) else 3
             self.pc = target
         else:
             # branch not taken.
@@ -549,7 +547,7 @@ class SamVirtualMachine:
                 self.pc += 2
                 self.clocks += 6 if self.different_pages(base_address, abs_address) else 5
             case _:
-                raise RuntimeError(f"Unhandled instruction: 0x{instruction:02x}")
+                raise RuntimeError(f"SamVirtualMachine encountered an unhandled 6502 instruction: 0x{instruction:02x}.")
 
 
 def resample(samples_in: list[tuple[int, int]], freq_in: float, freq_out: float) -> list[int]:
@@ -611,12 +609,21 @@ class SamEmulator:
 
     # The number of clock cycles that a PAL Atari 6502 runs per second.
     # The actual clock cycle behavior of the Atari 8-bit computer is complicated.
-    # The cycles where the CPU is doing work are not fully periodic, even when DMA is disabled and no interrupts are generated;
-    # this is due to memory refresh cycles during which the CPU is temporarily halted. In the end, it turns out that a full screen
-    # cycle corresponds to precisely 32760 CPU cycles (when DMA is disabled), and measurement on a real Atari shows that screens
-    # are generated at a rate of 49.860339 screens/s. Hence, the mean CPU rate comes out as 32760 * 49.860339 == 1.633425e6 CPU cycles
-    # per second.
-    DEFAULT_CPU_FREQUENCY = 1.633425e6
+    #
+    # The cycles where the CPU is doing work are not fully regular, even when DMA is disabled and no interrupts are generated,
+    # as it is when SAM is running in "lights-out" mode. This is due to the fact that memory refresh cycles are always generated,
+    # during which the CPU is temporarily halted.
+    #
+    # On a PAL Atari, a full frame of video corresponds to 312 lines periods of 114 clock cycles each (so 35568 clock cycles altogether).
+    # During each line, period, 9 clock cycles are "stolen" for memory refresh, during which the CPU is halted. That leaves 312 * 105 ==
+    # 32760 clock cycles to the CPU.
+    #
+    # The PAL Atari clock base is generated by a (nominally) 3.546895 MHz crystal. That clock is divided by two to generate the 1.7734475 MHz
+    # clock used for the 6502 and other chips. This means that, with an ideal crystal, the CPU runs at an average frequency of 1.633438 MHz.
+    #
+    # In reality, clock cycles are slightly irregular due to the memory refresh cycle stealing, but we ignore that effect here.
+
+    DEFAULT_CPU_FREQUENCY = (3.546895 / 2) * (105/114)  # 1.633438 MHz.
 
     # The default sample rate at which to render speech.
     DEFAULT_AUDIO_SAMPLE_FREQUENCY = 48000.0

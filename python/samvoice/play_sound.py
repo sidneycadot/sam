@@ -10,7 +10,7 @@ except ModuleNotFoundError:
     IMPORTS_OK = False
 
 
-def add_field(field, value):
+def add_field(field: str, value) -> None:
     """Decorate a function with a field and a value."""
     def decorate(f):
         setattr(f, field, value)
